@@ -1,8 +1,10 @@
+DELAY ?= 3
+
 .PHONY: help setup fetch merge build refresh test
 
 help:
 	@echo "make setup    one-time: venv, playwright, chromium (only needed for tests)"
-	@echo "make fetch    find visits missing from the dataset, write new.json (run from your machine)"
+	@echo "make fetch    (DELAY=10 to go slower) find visits missing from the dataset, write new.json (run from your machine)"
 	@echo "make merge    validate and merge new.json into data/closet.json"
 	@echo "make build    regenerate index.html and dist/index.html"
 	@echo "make refresh  fetch + merge + build + test"
@@ -14,7 +16,7 @@ setup:
 	.venv/bin/playwright install chromium
 
 fetch:
-	python3 scripts/fetch_letterboxd.py --out new.json
+	python3 scripts/fetch_letterboxd.py --out new.json --delay $(DELAY)
 
 merge:
 	@test -f new.json || { echo "new.json not found: run make fetch first"; exit 1; }
