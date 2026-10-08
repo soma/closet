@@ -120,6 +120,7 @@ def parse_film(slug, title, year, page):
         return [html.unescape(x) for x in re.findall(rf'href="/films/{kind}/[^"]+/"[^>]*>\s*<span class="text">([^<]+)</span>', page)] or \
                [html.unescape(x) for x in re.findall(rf'href="/films/{kind}/[^"]+/"[^>]*>([^<]+)</a>', page)]
 
+    imdb = re.search(r'imdb\.com/title/(tt\d{7,10})', page)
     rating = (ld.get("aggregateRating") or {})
     runtime = re.search(r"([\d,]+)\s*(?:&nbsp;|\s)*mins", page)
     languages = links("language")
@@ -134,6 +135,7 @@ def parse_film(slug, title, year, page):
         "studios": "; ".join(names("productionCompany")),
         "synopsis": html.unescape(re.sub(r"<[^>]+>", "", (re.search(r'<div class="truncate[^"]*"[^>]*>(.*?)</div>', page, re.S) or [None, ""])[1])).strip(),
         "poster_url": ld.get("image") or meta(page, "image"),
+        "imdb_id": imdb.group(1) if imdb else "",
     }
 
 

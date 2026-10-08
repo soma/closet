@@ -9,13 +9,16 @@ picks, films, each {cols, rows}); any table may be omitted. Existing rows win
 unless --overwrite. The merged dataset is validated as a whole and only then
 written. Run scripts/build.py afterwards to regenerate the HTML.
 """
-import argparse, csv, collections, json, pathlib, sys
+import argparse, csv, collections, json, pathlib, re, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "data/closet.json"
 KEYS = {"visits": "visit_slug", "films": "film_slug", "picks": ("visit_slug", "pick_order")}
 INT_COLS = {"num_films", "pick_order", "film_year", "runtime_min", "rating_count"}
 FLOAT_COLS = {"avg_rating"}
+
+
+IMDB_RE = re.compile(r"^tt\d{7,10}$")
 
 
 class MergeError(Exception):
@@ -69,6 +72,9 @@ def validate(data):
             if k in seen:
                 problems.append(f"duplicate {table} key {k!r}")
             seen.add(k)
+    for f in films:
+        if f.get("imdb_id") and not IMDB_RE.match(f["imdb_id"]):
+            problems.append(f"film {f['film_slug']!r}: invalid imdb_id {f['imdb_id']!r}")
     visit_slugs = {v["visit_slug"] for v in visits}
     film_slugs = {f["film_slug"] for f in films}
     by_visit = collections.defaultdict(list)

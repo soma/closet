@@ -36,6 +36,7 @@ SERVER = (ROOT / "dist/server.js").read_text(encoding="utf-8")
 FAKE_PAGES = HOST + """
 window.pages = (function () {
   const host = makeHost(%s, []);
+  window.__host = host;
   return { call: (a, args) => host.call(a, args, "u1"), currentUser: () => ({ id: "u1", name: "Ann" }) };
 })();
 window.__delays = {};
@@ -261,6 +262,42 @@ class Smoke(unittest.TestCase):
             page.wait_for_selector("#main h2:has-text('Film clubs')")
             page.wait_for_selector(".club-error:has-text('unknown club')")
             self.assertEqual(page.evaluate("location.hash"), "#clubs")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_imdb_links_in_popup_and_club_and_old_entries_are_repaired(self):
+        slug, imdb = "12-angry-men", "tt0050083"
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            fake = FAKE_PAGES
+            # give the server a known id for one film regardless of the dataset state
+            server = SERVER.replace("const FILM_SLUGS =", f'FILM_IMDB["{slug}"] = "{imdb}";\nconst FILM_SLUGS =', 1)
+            fake = fake.replace(json.dumps(SERVER), json.dumps(server))
+            pre = f"""(function () {{
+              const host = window.__host;
+              host.call("create_club", {{ name: "Old Entries" }}, "u1");
+              host.call("add_entry", {{ club_id: "id1", film_slug: "{slug}" }}, "u1");
+              host.db.entries[0].data.imdb_id = "";     // added before the column existed
+            }})();"""
+            page.add_init_script(fake + pre)
+            page.goto((ROOT / "dist/index.html").as_uri() + "#clubs/id1")
+            page.wait_for_function("typeof DB !== 'undefined' && DB !== null")
+            page.evaluate(f"DB.filmBy.get('{slug}').imdb_id = '{imdb}'")
+            page.evaluate("renderView()")
+            page.wait_for_selector("#main h2:has-text('Old Entries')")
+            link = page.locator(".club-current a.ext")
+            link.wait_for()
+            self.assertEqual(link.get_attribute("href"), f"https://www.imdb.com/title/{imdb}/")
+            self.assertEqual(link.get_attribute("rel"), "noopener")
+            page.wait_for_function(f"__host.db.entries[0].data.imdb_id === '{imdb}'")   # repaired by fill_imdb
+            page.evaluate(f"openFilmModal('{slug}')")
+            modal = page.locator(".film-modal a.ext")
+            self.assertEqual(modal.get_attribute("href"), f"https://www.imdb.com/title/{imdb}/")
+            page.evaluate(f"closeModal(); DB.filmBy.get('{slug}').imdb_id = ''; openFilmModal('{slug}')")
+            self.assertEqual(page.locator(".film-modal a.ext").count(), 0)          # no id, no link
             self.assertEqual(errors, [])
             browser.close()
 

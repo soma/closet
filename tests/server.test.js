@@ -5,7 +5,7 @@ const path = require("node:path");
 const { makeHost } = require("./host_sim.js");
 
 const source = fs.readFileSync(path.join(__dirname, "../src/server.js"), "utf8");
-const SLUGS = ["a", "b", "c", "d"];
+const SLUGS = { a: "tt0000001", b: "", c: "tt0000003", d: "tt0000004" };
 
 function setup() {
   const host = makeHost(source, SLUGS);
@@ -23,6 +23,36 @@ test("first add becomes current, later adds upcoming, re-adding is a no-op", asy
   const again = await s.bob("add_entry", { club_id: c, film_slug: "a" });
   assert.equal(again.existing, true);
   assert.deepEqual(states(await state(s, c)), { a: "current", b: "upcoming" });
+});
+
+test("add_entry stores the dataset's imdb id, empty when the film has none", async () => {
+  const s = setup(); const c = await club(s);
+  await s.ann("add_entry", { club_id: c, film_slug: "a" });
+  await s.ann("add_entry", { club_id: c, film_slug: "b" });
+  const byFilm = Object.fromEntries((await state(s, c)).entries.map(e => [e.data.film_slug, e.data.imdb_id]));
+  assert.deepEqual(byFilm, { a: "tt0000001", b: "" });
+});
+
+test("fill_imdb repairs old entries only, is idempotent, changes no state, logs globally once", async () => {
+  const s = setup(); const c1 = await club(s);
+  const c2 = (await s.bob("create_club", { name: "Other" })).id;
+  const a = await s.ann("add_entry", { club_id: c1, film_slug: "a" });
+  const cc = await s.bob("add_entry", { club_id: c2, film_slug: "c", watched_on: "2026-01-01" });
+  await s.ann("add_entry", { club_id: c1, film_slug: "b" });
+  for (const r of s.host.db.entries) if (r.data.film_slug !== "b") r.data.imdb_id = "";   // as if added before the column existed
+  const before = JSON.parse(JSON.stringify(s.host.db.entries));
+  assert.equal((await s.ann("fill_imdb", {})).filled, 2);
+  const after = s.host.db.entries;
+  for (const [i, r] of after.entries()) {
+    assert.deepEqual({ ...r.data, imdb_id: "" }, { ...before[i].data, imdb_id: "" }, "nothing but imdb_id changes");
+  }
+  assert.deepEqual(Object.fromEntries(after.map(r => [r.data.film_slug, r.data.imdb_id])), { a: "tt0000001", c: "tt0000003", b: "" });
+  assert.equal((await s.ann("fill_imdb", {})).filled, 0);
+  const fills = s.host.db.log.filter(l => l.data.action === "fill_imdb");
+  assert.equal(fills.length, 1);
+  assert.equal(fills[0].data.club_id, "");
+  for (const id of [c1, c2]) assert.ok(!(await state(s, id)).log.some(l => l.data.action === "fill_imdb"), "not in club activity");
+  assert.ok(a.id && cc.id);
 });
 
 test("rejects unknown film, unknown club, bad dates and bad times", async () => {

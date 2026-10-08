@@ -120,12 +120,27 @@ function openClub(id) {
   writeHash(); renderView();
 }
 
-function filmLine(slug) {
+function filmLine(slug, imdbId) {
   const f = DB.filmBy.get(slug);
   if (!f) return el("span", {}, slug);
+  const imdb = imdbUrl(imdbId) || imdbUrl(f.imdb_id);
   return el("span", { class: "club-film" },
     el("a", { href: "#", onclick: e => { e.preventDefault(); openFilmModal(slug); } }, f.film_title),
-    ` (${f.film_year ?? "?"}) · ${f._directors.join(", ")} · ${f.runtime_min ?? "?"} min`);
+    ` (${f.film_year ?? "?"}) · ${f._directors.join(", ")} · ${f.runtime_min ?? "?"} min`,
+    imdb ? " · " : null,
+    imdb ? el("a", { class: "ext", href: imdb, target: "_blank", rel: "noopener" }, "IMDb") : null);
+}
+
+/* Entries added before imdb_id existed are repaired once per page load. */
+let imdbFillAsked = false;
+async function maybeFillImdb(data) {
+  if (imdbFillAsked || !data.entries.some(e => !e.data.imdb_id && DB.filmBy.get(e.data.film_slug)?.imdb_id)) return;
+  imdbFillAsked = true;
+  const id = CLUB.id;
+  try {
+    const r = await window.pages.call("fill_imdb", {});
+    if (r.filled && CLUB.id === id && await loadClub(id)) renderView();
+  } catch (e) { /* harmless: the club view falls back to the dataset's id */ }
 }
 
 function filmThumb(slug) {
@@ -142,6 +157,7 @@ function filmThumb(slug) {
 
 function paintClub(body) {
   const d = CLUB.data;
+  maybeFillImdb(d);
   const entries = d.entries;
   const cid = d.club.id;   // every action below is bound to the club this data belongs to
   const current = entries.find(e => e.data.state === "current");
@@ -172,7 +188,7 @@ function paintClub(body) {
     el("h3", {}, "Current"),
     current
       ? el("div", { class: "club-current" }, filmThumb(current.data.film_slug),
-          el("div", {}, el("div", { class: "club-title" }, filmLine(current.data.film_slug)),
+          el("div", {}, el("div", { class: "club-title" }, filmLine(current.data.film_slug, current.data.imdb_id)),
             current.data.scheduled_for ? el("div", { class: "club-when" }, "Scheduled " + fmtWhen(current.data.scheduled_for)) : el("div", { class: "club-when" }, "No time set"),
             el("div", { class: "club-actions" }, timeInput(current), watchedControl(current),
               el("button", { class: "btn small ghost", disabled: CLUB.busy, onclick: () => act("remove_entry", current) }, "Remove"))))
@@ -180,7 +196,7 @@ function paintClub(body) {
     el("h3", {}, "Up next"),
     upcoming.length ? el("ul", { class: "club-list" }, upcoming.map(e => el("li", {},
       filmThumb(e.data.film_slug),
-      el("div", {}, filmLine(e.data.film_slug),
+      el("div", {}, filmLine(e.data.film_slug, e.data.imdb_id),
         e.data.scheduled_for ? el("div", { class: "club-when" }, "Scheduled " + fmtWhen(e.data.scheduled_for)) : null,
         el("div", { class: "club-actions" },
           el("button", { class: "btn small", disabled: CLUB.busy, onclick: () => act("make_current", e) }, "Make current"),
@@ -246,7 +262,7 @@ function watchedEl(e, act) {
   const note = el("textarea", { maxlength: 1000, rows: 2, placeholder: "Your note (optional)", "aria-label": "Your note" }, my ? my.data.note : "");
   note.value = my ? my.data.note : "";
   return el("li", {}, filmThumb(e.data.film_slug),
-    el("div", {}, filmLine(e.data.film_slug),
+    el("div", {}, filmLine(e.data.film_slug, e.data.imdb_id),
       el("div", { class: "club-when" }, `Watched ${e.data.watched_on}${mean ? " · mean " + mean + "/10 (" + mine.length + ")" : ""}`),
       el("ul", { class: "club-ratings" }, mine.map(r => el("li", {}, `${whoOf(r)}: ${r.data.score}/10${r.data.note ? " — " + r.data.note : ""}`))),
       el("div", { class: "club-actions" }, score, note,

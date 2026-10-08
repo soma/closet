@@ -4,7 +4,7 @@
 (function (root) {
   function makeHost(serverSource, slugs, opts) {
     opts = opts || {};
-    const APP = new Function("__SLUGS__", serverSource.split("__FILM_SLUGS__").join("__SLUGS__") + "\nreturn APP;")(slugs);
+    const APP = new Function("__SLUGS__", serverSource.split("__FILM_IMDB__").join("__SLUGS__") + "\nreturn APP;")(slugs);
     const db = opts.db || {};
     let seq = opts.seq || 0;
     let clock = opts.clock || 0;

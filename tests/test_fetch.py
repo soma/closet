@@ -28,6 +28,12 @@ class Parsing(unittest.TestCase):
         row = f.parse_film("x", "X", 2000, "<html></html>")
         self.assertEqual((row["film_slug"], row["film_year"], row["runtime_min"]), ("x", 2000, None))
 
+    def test_film_imdb_id_comes_from_the_imdb_link_or_is_blank(self):
+        page = '<a href="http://www.imdb.com/title/tt0050083/maindetails" class="micro-button">IMDb</a>'
+        self.assertEqual(f.parse_film("x", "X", 2000, page)["imdb_id"], "tt0050083")
+        self.assertEqual(f.parse_film("x", "X", 2000, "<html></html>")["imdb_id"], "")
+        self.assertEqual(f.parse_film("x", "X", 2000, '<a href="https://www.imdb.com/name/nm0000001/">x</a>')["imdb_id"], "")
+
     def test_unrecognised_pages_raise_instead_of_parsing_as_empty(self):
         junk = "<html><body>Unexpected page</body></html>"
         with self.assertRaises(f.ParseError):

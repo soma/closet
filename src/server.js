@@ -1,6 +1,7 @@
 // Film club feeds: server side of the Pages app. Not served to browsers.
-// The slug-list placeholder below is replaced at build time with the dataset's film slugs.
-const FILM_SLUGS = new Set(__FILM_SLUGS__);
+// The placeholder below is replaced at build time with {film_slug: imdb_id or ""}.
+const FILM_IMDB = __FILM_IMDB__;
+const FILM_SLUGS = new Set(Object.keys(FILM_IMDB));
 
 const MAX_NOTE = 1000;
 const MAX_NAME = 80;
@@ -127,9 +128,28 @@ const APP = {
       const state = watchedOn ? "watched" : (c.hasCurrent() ? "upcoming" : "current");
       const id = c.nextId();
       c.writes.push({ op: "create", collection: "entries", id, data: {
-        club_id: c.cid, film_slug: slug, state, scheduled_for: null, watched_on: watchedOn, by_name: c.by_name } });
+        club_id: c.cid, film_slug: slug, imdb_id: FILM_IMDB[slug] || "", state, scheduled_for: null, watched_on: watchedOn, by_name: c.by_name } });
       c.log("add", { id, data: { film_slug: slug } }, state);
       return { result: { id, state }, writes: c.writes };
+    },
+  },
+
+  // Maintenance: entries added before imdb_id existed get it from the dataset map.
+  // Changes nothing else. One global log row (empty club_id, so it is not part of
+  // any club's activity) only when something changed.
+  fill_imdb: {
+    inputs: () => ({ entries: { collection: "entries" } }),
+    run: (args, actor, rows, ids) => {
+      const writes = [];
+      for (const e of rows.entries) {
+        const id = FILM_IMDB[e.data.film_slug];
+        if (!e.data.imdb_id && id) writes.push({ op: "update", collection: "entries", id: e.id, data: { ...e.data, imdb_id: id } });
+      }
+      if (writes.length) {
+        writes.push({ op: "create", collection: "log", id: ids.shift() ?? fail("no id available"),
+          data: { club_id: "", action: "fill_imdb", film_slug: "", entry_id: "", detail: String(writes.length), by_name: "" } });
+      }
+      return { result: { filled: writes.length ? writes.length - 1 : 0 }, writes };
     },
   },
 

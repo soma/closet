@@ -997,6 +997,7 @@ const el = (tag, props = {}, ...kids) => {
   }
   return e;
 };
+const imdbUrl = id => /^tt\d{7,10}$/.test(id || "") ? `https://www.imdb.com/title/${id}/` : null;
 const splitList = s => (s ? s.split(";").map(x => x.trim()).filter(Boolean) : []);
 const fmt = n => n == null ? "—" : n.toLocaleString();
 const safeHtml = s => String(s ?? "").replace(/[<>&"]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
@@ -2064,6 +2065,7 @@ function openFilmModal(slug) {
       f.film_year && f.directors ? "  ·  " : null,
       f.directors ? "dir. " + splitList(f.directors).join(", ") : null
     ),
+    imdbUrl(f.imdb_id) ? el("p", {}, el("a", { class: "ext", href: imdbUrl(f.imdb_id), target: "_blank", rel: "noopener" }, "IMDb ↗")) : null,
     f.synopsis ? el("p", { class: "synopsis" }, f.synopsis) : null,
     f.genres ? tagRow("Genres", splitList(f.genres)) : null,
     f.themes ? tagRow("Themes", splitList(f.themes)) : null,

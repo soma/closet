@@ -35,6 +35,30 @@ class BuiltPage(unittest.TestCase):
             self.assertEqual((ROOT / target).read_text(encoding="utf-8"), html)
 
 
+class ImdbData(unittest.TestCase):
+    def test_every_imdb_id_is_blank_or_well_formed(self):
+        cols = DATA["films"]["cols"]
+        i = cols.index("imdb_id")
+        bad = [r[0] for r in DATA["films"]["rows"] if r[i] and not merge_data.IMDB_RE.match(r[i])]
+        self.assertEqual(bad, [])
+
+    def test_merge_rejects_a_malformed_imdb_id(self):
+        inc = incoming()
+        cols = inc["films"]["cols"]
+        inc["films"]["rows"][0][cols.index("imdb_id")] = "nm0000001"
+        with self.assertRaisesRegex(merge_data.MergeError, "invalid imdb_id"):
+            merge_data.merge(DATA, inc)
+
+    def test_build_injects_the_imdb_map_into_server_js(self):
+        build.build()
+        server = (ROOT / "dist/server.js").read_text(encoding="utf-8")
+        self.assertNotIn("__FILM_IMDB__", server)
+        cols = DATA["films"]["cols"]
+        with_id = next((r for r in DATA["films"]["rows"] if r[cols.index("imdb_id")]), None)
+        if with_id:
+            self.assertIn(f'"{with_id[0]}":"{with_id[cols.index("imdb_id")]}"', server)
+
+
 class Validation(unittest.TestCase):
     def test_existing_dataset_is_valid(self):
         self.assertEqual(merge_data.validate(DATA), [])
