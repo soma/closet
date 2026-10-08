@@ -13,6 +13,7 @@ import argparse, csv, collections, json, pathlib, re, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "data/closet.json"
+EXCLUDED = ROOT / "data/excluded_lists.json"   # {"slugs": [...]}: Letterboxd lists that are not visits
 KEYS = {"visits": "visit_slug", "films": "film_slug", "picks": ("visit_slug", "pick_order")}
 INT_COLS = {"num_films", "pick_order", "film_year", "runtime_min", "rating_count"}
 FLOAT_COLS = {"avg_rating"}
@@ -94,13 +95,53 @@ def validate(data):
     return problems
 
 
-def merge(existing, incoming, overwrite=False):
+VISITOR_RE = re.compile(r"^(.*?)(?:['\u2019]s?)?(?: Criterion)? Closet Picks$")
+
+
+def clean_visitor(visitor):
+    """The fetcher sometimes leaves the whole list title as the visitor
+    ("Danny McBride's Closet Picks"): reduce it to the name."""
+    m = VISITOR_RE.match(visitor or "")
+    return m.group(1).strip() if m and m.group(1).strip() else visitor
+
+
+def prepare(incoming, excluded=()):
+    """Drop lists that are not visits (with their picks, and incoming films that
+    nothing else picks) and tidy visitor names. Returns (incoming copy, dropped slugs)."""
+    out = {k: {"cols": list(v["cols"]), "rows": [list(r) for r in v["rows"]]} for k, v in incoming.items()}
+    excluded = set(excluded)
+    dropped = []
+    if "visits" in out:
+        cols = out["visits"]["cols"]
+        si, vi = cols.index("visit_slug"), cols.index("visitor") if "visitor" in cols else None
+        kept = []
+        for r in out["visits"]["rows"]:
+            if r[si] in excluded:
+                dropped.append(r[si])
+                continue
+            if vi is not None:
+                r[vi] = clean_visitor(r[vi])
+            kept.append(r)
+        out["visits"]["rows"] = kept
+    if dropped and "picks" in out:
+        pcols = out["picks"]["cols"]
+        pv, pf = pcols.index("visit_slug"), pcols.index("film_slug")
+        out["picks"]["rows"] = [r for r in out["picks"]["rows"] if r[pv] not in excluded]
+        if "films" in out:
+            still = {r[pf] for r in out["picks"]["rows"]}
+            fs = out["films"]["cols"].index("film_slug")
+            out["films"]["rows"] = [r for r in out["films"]["rows"] if r[fs] in still]
+    return out, dropped
+
+
+def merge(existing, incoming, overwrite=False, excluded=()):
     """Return (merged, stats). Raises MergeError if the result is invalid.
 
     Films and visits merge row by row. Picks merge per visit: an incoming
     visit that already exists is skipped whole, or with overwrite has all its
     picks replaced, so a visit never ends up with a mix of old and new picks.
     """
+    incoming, dropped = prepare(incoming, excluded)
     merged = {k: {"cols": list(v["cols"]), "rows": [list(r) for r in v["rows"]]}
               for k, v in existing.items() if k != "_meta"}
     for name in KEYS:
@@ -161,6 +202,7 @@ def merge(existing, incoming, overwrite=False):
         raise MergeError("merged dataset is invalid:\n  " + "\n  ".join(problems[:20]))
     merged["_meta"] = dict(existing.get("_meta", {}))
     merged["_meta"]["row_counts"] = {k: len(merged[k]["rows"]) for k in KEYS}
+    stats["excluded_lists"] = dropped
     return merged, stats
 
 
@@ -189,13 +231,18 @@ def main(argv=None):
     src = pathlib.Path(args.source)
     incoming = read_csv_dir(src) if src.is_dir() else json.loads(src.read_text(encoding="utf-8"))
     existing = json.loads(DATA.read_text(encoding="utf-8"))
+    excluded = json.loads(EXCLUDED.read_text(encoding="utf-8"))["slugs"] if EXCLUDED.exists() else []
     try:
-        merged, stats = merge(existing, incoming, args.overwrite)
+        merged, stats = merge(existing, incoming, args.overwrite, excluded)
     except MergeError as e:
         print(f"merge_data: {e}", file=sys.stderr)
         return 1
     DATA.write_text(dump(merged), encoding="utf-8")
     for name, s in stats.items():
+        if name == "excluded_lists":
+            if s:
+                print("excluded (not visits): " + ", ".join(s))
+            continue
         print(f"{name}: {s['added']} added, {s['skipped']} skipped, {s['replaced']} replaced")
     return 0
 

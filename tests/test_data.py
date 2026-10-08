@@ -172,6 +172,31 @@ class Merge(unittest.TestCase):
             self.assertEqual(merge_data.main([str(f)]), 1)
         self.assertEqual((ROOT / "data/closet.json").read_bytes(), before)
 
+    def test_non_visit_lists_are_excluded_with_their_picks_and_orphan_films(self):
+        inc = incoming()
+        vc, pc, fc = inc["visits"]["cols"], inc["picks"]["cols"], inc["films"]["cols"]
+        meta_visit = list(inc["visits"]["rows"][0]); meta_visit[vc.index("visit_slug")] = "all-time-top"
+        inc["visits"]["rows"].append(meta_visit)
+        shared = list(inc["films"]["rows"][0]); shared[fc.index("film_slug")] = "only-in-meta"
+        inc["films"]["rows"].append(shared)
+        inc["picks"]["rows"] += [["all-time-top", 1, "new-film", "New Film", 2026], ["all-time-top", 2, "only-in-meta", "Meta", 2026]]
+        merged, stats = merge_data.merge(DATA, inc, excluded=["all-time-top"])
+        self.assertEqual(stats["excluded_lists"], ["all-time-top"])
+        slugs = lambda t, i: {r[i] for r in merged[t]["rows"]}
+        self.assertNotIn("all-time-top", slugs("visits", 0))
+        self.assertNotIn("only-in-meta", slugs("films", 0), "film nothing else picks is not added")
+        self.assertIn("new-film", slugs("films", 0), "film also picked by a real visit is kept")
+        self.assertEqual(sum(1 for r in merged["picks"]["rows"] if r[0] == "all-time-top"), 0)
+        self.assertEqual(merge_data.validate({k: v for k, v in merged.items() if k != "_meta"}), [])
+
+    def test_visitor_names_are_cleaned_when_the_title_was_left_in(self):
+        c = merge_data.clean_visitor
+        self.assertEqual(c("Danny McBride\u2019s Closet Picks"), "Danny McBride")
+        self.assertEqual(c("Carla Sim\u00f3n's Closet Picks"), "Carla Sim\u00f3n")
+        self.assertEqual(c("Adam Scott's Criterion Closet Picks"), "Adam Scott")
+        self.assertEqual(c("Adam Scott"), "Adam Scott")
+        self.assertEqual(c("Closet Picks"), "Closet Picks", "never reduce a name to nothing")
+
     def test_merge_then_build_keeps_new_rows(self):
         merged, _ = merge_data.merge(DATA, incoming())
         with tempfile.TemporaryDirectory() as d:

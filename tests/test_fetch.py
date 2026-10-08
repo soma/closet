@@ -53,6 +53,15 @@ class Orchestration(unittest.TestCase):
         patcher = mock.patch.object(f, "CACHE", self.dir / "cache")
         patcher.start()
         self.addCleanup(patcher.stop)
+        # An empty dataset with the real columns: these tests must not depend on which
+        # visits the real data/closet.json happens to contain at the moment.
+        real = json.loads((ROOT / "data/closet.json").read_text(encoding="utf-8"))
+        (self.dir / "data").mkdir()
+        (self.dir / "data/closet.json").write_text(json.dumps(
+            {t: {"cols": real[t]["cols"], "rows": []} for t in ("visits", "picks", "films")}), encoding="utf-8")
+        root = mock.patch.object(f, "ROOT", self.dir)
+        root.start()
+        self.addCleanup(root.stop)
         self.index = (FIX / "lists_index.html").read_text(encoding="utf-8")
         self.listing = (FIX / "list.html").read_text(encoding="utf-8")
 
@@ -61,6 +70,8 @@ class Orchestration(unittest.TestCase):
             body = responses.get(path)
             if body is None and path.startswith("/closetpicks/lists/page/"):
                 body = responses["/closetpicks/lists/"]
+            if body is None and path.startswith("/film/"):
+                body = "<html></html>"          # parse_film is stubbed in these tests
             if isinstance(body, Exception):
                 raise body
             if not refresh and f.cache_path(path).exists():
@@ -74,8 +85,6 @@ class Orchestration(unittest.TestCase):
     def test_second_run_discovers_a_visit_added_to_the_index(self):
         base = {"/closetpicks/lists/": self.index, "/closetpicks/lists/page/2/": self.index,
                 "/closetpicks/list/sander-laks-criterion-closet-picks/": self.listing}
-        data_visits = {r[0] for r in json.loads((ROOT / "data/closet.json").read_text(encoding="utf-8"))["visits"]["rows"]}
-        self.assertNotIn("sander-laks-criterion-closet-picks", data_visits)
         grown = self.index.replace("sander-laks-criterion-closet-picks", "brand-new-visit-picks", 1)
         responses = dict(base, **{"/closetpicks/list/brand-new-visit-picks/": self.listing})
         self.assertEqual(self.run_main(base, "first.json", ["--max-visits", "1"]), 0)
