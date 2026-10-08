@@ -1,0 +1,2186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>The Closet — Criterion Closet Picks Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ---------- design tokens ---------- */
+  :root {
+    --bg: #0e0c0a;
+    --bg-elev: #161310;
+    --bg-card: #1c1814;
+    --bg-card-2: #221d18;
+    --ink: #ece4d3;
+    --ink-dim: #b8ad97;
+    --ink-faint: #6b6354;
+    --rule: #2a241d;
+    --accent: #d6a445;
+    --accent-bright: #f1bf5c;
+    --accent-deep: #8a6921;
+    --crimson: #b34f3a;
+    --shadow: 0 22px 48px -16px rgba(0,0,0,0.7), 0 6px 14px -4px rgba(0,0,0,0.5);
+    --serif-display: 'DM Serif Display', 'Playfair Display', Georgia, serif;
+    --serif-body: 'EB Garamond', Georgia, serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { background: var(--bg); }
+  body {
+    font-family: var(--serif-body);
+    font-size: 17px;
+    line-height: 1.45;
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 600px at 75% -10%, rgba(214,164,69,0.07), transparent 60%),
+      radial-gradient(900px 500px at 10% 110%, rgba(179,79,58,0.06), transparent 65%),
+      var(--bg);
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* film grain overlay */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1000;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>");
+    opacity: 0.18;
+    mix-blend-mode: overlay;
+  }
+  /* vignette */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 999;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%);
+  }
+
+  /* ---------- typography ---------- */
+  h1, h2, h3, h4 { font-family: var(--serif-display); font-weight: 400; letter-spacing: 0.005em; }
+  h1 { font-size: clamp(2.4rem, 5.5vw, 4.2rem); line-height: 0.95; margin: 0; }
+  h2 { font-size: clamp(1.5rem, 2.6vw, 2.1rem); line-height: 1.1; margin: 0; }
+  h3 { font-size: 1.25rem; line-height: 1.2; margin: 0; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 500;
+  }
+  .accent { color: var(--accent); }
+  em.title { font-style: italic; color: var(--ink); }
+  .num {
+    font-family: var(--serif-display);
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  /* ---------- layout shell ---------- */
+  .shell {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 28px clamp(16px, 3vw, 44px) 80px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ---------- top bar ---------- */
+  header.top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 38px;
+  }
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .brand .mark {
+    font-family: var(--serif-display);
+    font-size: 28px;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .brand .mark .ornament {
+    color: var(--accent);
+    margin: 0 4px;
+  }
+  .brand .tagline {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  nav.tabs {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--bg-elev);
+  }
+  nav.tabs button {
+    appearance: none;
+    background: transparent;
+    color: var(--ink-dim);
+    border: 0;
+    border-right: 1px solid var(--rule);
+    padding: 11px 22px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.18s, background 0.18s;
+  }
+  nav.tabs button:last-child { border-right: 0; }
+  nav.tabs button:hover { color: var(--ink); background: rgba(214,164,69,0.06); }
+  nav.tabs button.is-active {
+    color: var(--bg);
+    background: var(--accent);
+  }
+
+  @media (max-width: 720px) {
+    header.top { flex-direction: column; align-items: stretch; }
+    nav.tabs { width: 100%; }
+    nav.tabs button { flex: 1; padding: 10px 8px; font-size: 10.5px; letter-spacing: 0.12em; }
+  }
+
+  /* ---------- hero (landing) ---------- */
+  .hero {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 56px;
+    align-items: end;
+    margin-bottom: 56px;
+  }
+  .hero h1 .stroke {
+    -webkit-text-stroke: 1px var(--ink);
+    color: transparent;
+    font-style: italic;
+  }
+  .hero p.lede {
+    font-size: 1.05rem;
+    color: var(--ink-dim);
+    max-width: 56ch;
+    margin: 18px 0 0;
+  }
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    border-top: 1px solid var(--rule);
+    padding-top: 18px;
+  }
+  .hero-stats .stat .num { font-size: 2.2rem; line-height: 1; display: block; color: var(--accent); }
+  .hero-stats .stat .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-faint); margin-top: 6px; }
+  @media (max-width: 980px) { .hero { grid-template-columns: 1fr; gap: 32px; } }
+
+  /* ---------- charts strip ---------- */
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-bottom: 60px;
+  }
+  .panel {
+    background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-card-2) 100%);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 18px 20px 20px;
+    position: relative;
+  }
+  .panel header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 14px;
+  }
+  .panel .title { font-family: var(--serif-display); font-size: 1.05rem; }
+  .panel .hint { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint); }
+  @media (max-width: 1100px) { .strip { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px)  { .strip { grid-template-columns: 1fr; } }
+
+  /* mini list inside panels */
+  .minilist { display: flex; flex-direction: column; gap: 8px; }
+  .minilist .row {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 0.95rem;
+    cursor: pointer;
+    padding: 3px 0;
+    border-bottom: 1px dashed transparent;
+  }
+  .minilist .row:hover { border-bottom-color: var(--rule); }
+  .minilist .row .rank { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+  .minilist .row .lbl { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .minilist .row .lbl em { color: var(--ink-dim); font-style: italic; }
+  .minilist .row .val { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+
+  /* horizontal bars (countries) */
+  .bar-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 36px;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+  }
+  .bar-row .lbl { color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-row .bar {
+    height: 6px;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    position: relative;
+    overflow: hidden;
+  }
+  .bar-row .bar::after {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    width: var(--w, 0%);
+    background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+  }
+  .bar-row .v { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-align: right; }
+
+  /* decade chart */
+  .decade-chart { width: 100%; height: 130px; display: block; }
+
+  /* ---------- section header ---------- */
+  .section-h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 0 22px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .section-h .label { display: flex; align-items: baseline; gap: 14px; }
+  .section-h h2 { font-style: italic; }
+  .section-h .count { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); letter-spacing: 0.18em; text-transform: uppercase; }
+
+  /* ---------- chip filters ---------- */
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-bottom: 22px;
+    padding: 16px 18px;
+    background: var(--bg-elev);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+  }
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .filter-group .heading {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .chips {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    max-width: min(720px, 100%);
+  }
+  .chip {
+    appearance: none;
+    background: var(--bg-card);
+    color: var(--ink-dim);
+    border: 1px solid var(--rule);
+    padding: 5px 10px;
+    border-radius: 100px;
+    font-family: var(--serif-body);
+    font-size: 13px;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+    line-height: 1.1;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--ink-faint); }
+  .chip.is-on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 600;
+  }
+  .chip .n { font-family: var(--mono); font-size: 10.5px; opacity: 0.65; margin-left: 6px; }
+  .chip.is-on .n { opacity: 0.75; }
+
+  /* sliders */
+  .filter-range { display: flex; align-items: center; gap: 10px; }
+  .filter-range label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
+  .filter-range input[type="range"] {
+    -webkit-appearance: none;
+    width: 130px;
+    height: 4px;
+    background: var(--rule);
+    border-radius: 2px;
+    outline: none;
+  }
+  .filter-range input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    border: 2px solid var(--bg);
+  }
+  .filter-range input[type="range"]::-moz-range-thumb {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: 2px solid var(--bg);
+  }
+  .filter-range .v { font-family: var(--mono); font-size: 12px; color: var(--accent); min-width: 32px; }
+
+  .filter-search {
+    flex: 1;
+    min-width: 160px;
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    color: var(--ink);
+    font-family: var(--serif-body);
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 2px;
+    outline: none;
+  }
+  .filter-search:focus { border-color: var(--accent); }
+  .filter-search::placeholder { color: var(--ink-faint); font-style: italic; }
+
+  .filter-clear {
+    appearance: none;
+    background: transparent;
+    color: var(--ink-faint);
+    border: 1px dashed var(--rule);
+    padding: 6px 12px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    align-self: flex-start;
+  }
+  .filter-clear:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* sort select */
+  .sort-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .sort-row .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint); }
+  .sort-row select {
+    background: var(--bg-card);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    padding: 6px 10px;
+    font-family: var(--serif-body);
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  /* ---------- poster grid ---------- */
+  .poster-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 18px;
+  }
+  .poster-card {
+    position: relative;
+    cursor: pointer;
+    background: var(--bg-card);
+    border-radius: 2px;
+    overflow: hidden;
+    transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .poster-card:hover { transform: translateY(-3px); }
+  .poster-card .poster-wrap {
+    aspect-ratio: 2 / 3;
+    background:
+      linear-gradient(180deg, #2a241d, #1c1814),
+      var(--bg-card);
+    overflow: hidden;
+    position: relative;
+  }
+  .poster-card .poster-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+  .poster-card .poster-wrap img.loaded { opacity: 1; }
+  .poster-card .placeholder {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px;
+    text-align: center;
+    font-family: var(--serif-display);
+    font-size: 13px;
+    line-height: 1.2;
+    color: var(--ink-dim);
+    font-style: italic;
+  }
+  .poster-card .badge {
+    position: absolute; top: 6px; right: 6px;
+    background: rgba(0,0,0,0.72);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    padding: 3px 7px;
+    border-radius: 2px;
+    border: 1px solid rgba(214,164,69,0.4);
+  }
+  .poster-card .reco-tag {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(0deg, rgba(0,0,0,0.92), rgba(0,0,0,0.7) 60%, transparent);
+    padding: 24px 10px 10px;
+    color: var(--ink);
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .poster-card .reco-tag em { color: var(--accent); font-style: italic; }
+  .poster-card .meta {
+    padding: 10px 4px 4px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .poster-card .meta .ttl {
+    font-family: var(--serif-display);
+    font-size: 0.95rem;
+    line-height: 1.15;
+    color: var(--ink);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .poster-card .meta .yr {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    flex-shrink: 0;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--ink-faint);
+    font-family: var(--serif-display);
+    font-style: italic;
+    font-size: 1.4rem;
+  }
+
+  /* ---------- visitor cards ---------- */
+  .visitor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .visitor-card {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: border-color 0.18s, transform 0.18s;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 140px;
+  }
+  .visitor-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .visitor-card .name {
+    font-family: var(--serif-display);
+    font-size: 1.3rem;
+    line-height: 1.1;
+    color: var(--ink);
+  }
+  .visitor-card .occ {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .visitor-card .date {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+  .visitor-card .nfilms {
+    font-family: var(--serif-display);
+    font-size: 1rem;
+    color: var(--ink-dim);
+    margin-top: auto;
+  }
+  .visitor-card .nfilms strong { color: var(--accent); font-weight: 400; }
+
+  /* superlatives strip */
+  .superlatives {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 30px;
+  }
+  .superlative {
+    background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-card-2) 100%);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: border-color 0.18s;
+  }
+  .superlative:hover { border-color: var(--accent); }
+  .superlative .award {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .superlative .winner {
+    font-family: var(--serif-display);
+    font-size: 1.4rem;
+    line-height: 1.05;
+    color: var(--ink);
+    font-style: italic;
+    margin-bottom: 4px;
+  }
+  .superlative .meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+  @media (max-width: 980px) { .superlatives { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 540px) { .superlatives { grid-template-columns: 1fr; } }
+
+  /* ---------- recommend ---------- */
+  .reco-builder {
+    background: var(--bg-elev);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 22px 24px;
+    margin-bottom: 30px;
+  }
+  .reco-builder .head {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+    margin-bottom: 14px;
+  }
+  .reco-builder h3 { font-style: italic; font-size: 1.4rem; }
+  .reco-search-wrap { position: relative; }
+  .reco-search {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    color: var(--ink);
+    font-family: var(--serif-body);
+    font-size: 17px;
+    padding: 12px 14px;
+    border-radius: 2px;
+    outline: none;
+  }
+  .reco-search:focus { border-color: var(--accent); }
+  .reco-search::placeholder { color: var(--ink-faint); font-style: italic; }
+  .reco-suggest {
+    position: absolute;
+    left: 0; right: 0; top: calc(100% + 4px);
+    background: var(--bg-card);
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    z-index: 50;
+    max-height: 280px;
+    overflow-y: auto;
+    box-shadow: var(--shadow);
+  }
+  .reco-suggest .item {
+    padding: 9px 14px;
+    cursor: pointer;
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .reco-suggest .item:last-child { border-bottom: 0; }
+  .reco-suggest .item:hover, .reco-suggest .item.is-active { background: rgba(214,164,69,0.1); }
+  .reco-suggest .item .ttl { color: var(--ink); }
+  .reco-suggest .item .ttl em { color: var(--ink-dim); font-style: italic; }
+  .reco-suggest .item .yr { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+
+  .seeds {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-top: 16px;
+    min-height: 30px;
+  }
+  .seed {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent);
+    color: var(--bg);
+    padding: 6px 6px 6px 12px;
+    border-radius: 100px;
+    font-size: 13.5px;
+    line-height: 1;
+  }
+  .seed .x {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.18);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; font-family: var(--mono); font-size: 14px; line-height: 1;
+    color: var(--bg);
+  }
+  .seed .x:hover { background: rgba(0,0,0,0.32); }
+  .seeds-empty {
+    font-style: italic; color: var(--ink-faint); font-size: 14px;
+    align-self: center;
+  }
+
+  .reco-controls {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    align-items: center;
+  }
+  .reco-controls > div { display: flex; align-items: center; gap: 8px; }
+  .reco-controls label.lab {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+  .reco-controls select { background: var(--bg-card); color: var(--ink); border: 1px solid var(--rule); padding: 5px 8px; font-family: var(--serif-body); font-size: 13px; }
+
+  .reco-empty {
+    text-align: center; padding: 60px 20px;
+    color: var(--ink-faint);
+    font-family: var(--serif-display); font-style: italic; font-size: 1.3rem;
+  }
+
+  /* ---------- modal ---------- */
+  .modal-back {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 2000;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 5vh 16px;
+    overflow-y: auto;
+    animation: fadeIn 0.18s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    width: 100%;
+    max-width: 920px;
+    background: var(--bg-elev);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    position: relative;
+    animation: slideUp 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  @keyframes slideUp { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal .close {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid var(--rule);
+    color: var(--ink-dim);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    z-index: 5;
+    font-size: 22px; line-height: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .modal .close:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* film modal */
+  .film-modal {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 28px;
+    padding: 32px 36px 32px 32px;
+  }
+  .film-modal .pcol .poster {
+    aspect-ratio: 2/3;
+    width: 100%;
+    background: var(--bg-card);
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .film-modal .pcol .poster img { width: 100%; height: 100%; object-fit: cover; }
+  .film-modal .pcol .pmeta { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .film-modal .pcol .pmeta .row {
+    display: grid; grid-template-columns: 78px 1fr; gap: 6px;
+    font-size: 13px;
+  }
+  .film-modal .pcol .pmeta .row .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); align-self: center; }
+  .film-modal .pcol .pmeta .row .v { color: var(--ink); }
+  .film-modal .info h3 {
+    font-family: var(--serif-display);
+    font-size: 2.2rem;
+    line-height: 1.05;
+    font-style: italic;
+    margin-bottom: 4px;
+  }
+  .film-modal .info .yr-dir {
+    font-family: var(--serif-body); font-size: 1rem;
+    color: var(--ink-dim);
+    margin-bottom: 14px;
+  }
+  .film-modal .info .yr-dir .yr { color: var(--accent); font-family: var(--serif-display); }
+  .film-modal .info .synopsis {
+    font-size: 16px; line-height: 1.55; color: var(--ink);
+    border-left: 2px solid var(--accent);
+    padding-left: 14px;
+    margin: 0 0 22px;
+  }
+  .tag-row { margin-bottom: 14px; }
+  .tag-row .lab {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--ink-faint); margin-right: 10px;
+  }
+  .tag-row .tag {
+    display: inline-block;
+    font-size: 13px;
+    color: var(--ink);
+    border-bottom: 1px dotted var(--rule);
+    margin-right: 14px;
+    padding-bottom: 1px;
+  }
+  .picked-by {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
+  }
+  .picked-by h4 {
+    font-family: var(--serif-display);
+    font-style: italic;
+    font-size: 1.2rem;
+    margin-bottom: 12px;
+  }
+  .picked-by h4 .n { color: var(--accent); font-style: normal; }
+  .picked-by .list {
+    display: flex; flex-wrap: wrap; gap: 8px 14px;
+    font-size: 14px;
+  }
+  .picked-by .pb {
+    cursor: pointer;
+    color: var(--ink-dim);
+    border-bottom: 1px dotted var(--rule);
+    padding-bottom: 1px;
+  }
+  .picked-by .pb:hover { color: var(--accent); border-color: var(--accent); }
+  .picked-by .pb .occ { color: var(--ink-faint); font-size: 12px; margin-left: 4px; }
+
+  @media (max-width: 720px) {
+    .film-modal { grid-template-columns: 1fr; padding: 24px 18px; gap: 18px; }
+    .film-modal .pcol { display: grid; grid-template-columns: 130px 1fr; gap: 14px; }
+    .film-modal .pcol .pmeta .row { grid-template-columns: 64px 1fr; }
+    .film-modal .info h3 { font-size: 1.7rem; }
+  }
+
+  /* visitor modal */
+  .visitor-modal { padding: 32px 36px; }
+  .visitor-modal .vhead {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .visitor-modal h3 {
+    font-family: var(--serif-display); font-size: 2.2rem; font-style: italic; line-height: 1.05;
+  }
+  .visitor-modal .vmeta {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .visitor-modal .vmeta .occ-tag {
+    color: var(--accent);
+    margin-right: 10px;
+  }
+  .visitor-modal .desc {
+    font-family: var(--serif-body); color: var(--ink-dim);
+    font-size: 15px; line-height: 1.55;
+    margin-bottom: 18px;
+    font-style: italic;
+    padding: 12px 16px;
+    background: var(--bg-card-2);
+    border-left: 2px solid var(--accent-deep);
+  }
+  .visitor-modal .links { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .visitor-modal .links a {
+    color: var(--accent);
+    text-decoration: none;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    border: 1px solid var(--accent-deep);
+    padding: 8px 14px;
+    border-radius: 2px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .visitor-modal .links a:hover { background: var(--accent); color: var(--bg); }
+  .visitor-modal .vstats {
+    display: flex; gap: 28px; flex-wrap: wrap;
+    padding: 14px 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 22px;
+  }
+  .visitor-modal .vstats .s .num { font-family: var(--serif-display); font-size: 1.6rem; color: var(--accent); display: block; line-height: 1; }
+  .visitor-modal .vstats .s .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
+  .visitor-modal .pgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+  }
+  .visitor-modal .pgrid .pic {
+    cursor: pointer;
+    background: var(--bg-card); border-radius: 2px; overflow: hidden;
+    aspect-ratio: 2/3;
+    position: relative;
+    transition: transform 0.18s;
+  }
+  .visitor-modal .pgrid .pic:hover { transform: scale(1.04); }
+  .visitor-modal .pgrid .pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s; z-index: 1; }
+  .visitor-modal .pgrid .pic img.loaded { opacity: 1; }
+  .visitor-modal .pgrid .pic .ord {
+    position: absolute; top: 4px; left: 4px;
+    background: rgba(0,0,0,0.8); color: var(--accent);
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 10px;
+  }
+  .visitor-modal .pgrid .pic .ttl-fall {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 6px;
+    text-align: center;
+    font-family: var(--serif-display);
+    font-size: 11px;
+    line-height: 1.15;
+    color: var(--ink-dim);
+    font-style: italic;
+  }
+
+  /* ---------- loading ---------- */
+  .loading {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 70vh;
+    gap: 20px;
+    text-align: center;
+  }
+  .loading .reel {
+    width: 80px; height: 80px;
+    border: 2px solid var(--rule);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1.2s linear infinite;
+    position: relative;
+  }
+  .loading .reel::before, .loading .reel::after {
+    content: ""; position: absolute;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent-deep);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .loading .reel::after {
+    width: 4px; height: 4px;
+    background: var(--bg);
+  }
+  @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+  .loading p {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* ---------- footer ---------- */
+  footer.foot {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    color: var(--ink-faint);
+    font-size: 13px;
+    font-family: var(--serif-body);
+    font-style: italic;
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  footer.foot a { color: var(--accent); text-decoration: none; }
+  footer.foot a:hover { text-decoration: underline; }
+  footer.foot .mono { font-family: var(--mono); font-style: normal; font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; }
+
+  /* ---------- view transitions ---------- */
+  .view { animation: viewIn 0.32s ease; }
+  @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* utility */
+  .hidden { display: none !important; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+</style>
+</head>
+<body>
+
+<div id="app" class="shell">
+  <div class="loading" id="loading">
+    <div class="reel" aria-hidden="true"></div>
+    <p>Threading the projector…</p>
+  </div>
+</div>
+
+<!-- modal mount -->
+<div id="modal-mount"></div>
+
+<script>
+/* =====================================================
+ *  THE CLOSET — Criterion Closet Picks Explorer
+ *  All logic in vanilla JS. No frameworks.
+ * ===================================================== */
+
+const DATA_B64 = "__DATA_B64__";
+
+/* --------- decode ---------- */
+async function decode(b64) {
+  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const stream = new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const text = await new Response(stream).text();
+  return JSON.parse(text);
+}
+function toObjects({ cols, rows }) {
+  return rows.map(r => Object.fromEntries(cols.map((c, i) => [c, r[i]])));
+}
+
+/* --------- helpers ---------- */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+const el = (tag, props = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v;
+    else if (k === "html") e.innerHTML = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
+    else if (k === "style" && typeof v === "object") Object.assign(e.style, v);
+    else if (v != null && v !== false) e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return e;
+};
+const splitList = s => (s ? s.split(";").map(x => x.trim()).filter(Boolean) : []);
+const fmt = n => n == null ? "—" : n.toLocaleString();
+const safeHtml = s => String(s ?? "").replace(/[<>&"]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const decadeOf = y => y == null ? null : Math.floor(y/10)*10;
+const debounce = (fn, ms = 200) => {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+};
+
+/* lazy poster loading using IntersectionObserver */
+const posterObserver = new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    if (e.isIntersecting) {
+      const img = e.target;
+      const url = img.dataset.src;
+      if (url && !img.src) {
+        img.src = url;
+        img.addEventListener("load", () => img.classList.add("loaded"), { once: true });
+        img.addEventListener("error", () => img.classList.add("err"), { once: true });
+      }
+      posterObserver.unobserve(img);
+    }
+  }
+}, { rootMargin: "300px 0px" });
+
+/* --------- global state ---------- */
+let DB = null;     // { films, visits, picks, filmBy, visitBy, picksByVisit, picksByFilm }
+let STATE = {
+  view: "browse",  // browse | visitors | recommend
+  // browse filters
+  bf: {
+    decade: new Set(),
+    country: new Set(),
+    genre: new Set(),
+    theme: new Set(),
+    director: new Set(),
+    language: new Set(),
+    minRating: 0,
+    maxRuntime: 360,
+    search: "",
+    sort: "picks",   // picks | rating | year_desc | year_asc | title
+  },
+  // visitors filters
+  vf: {
+    occ: "all",
+    search: "",
+  },
+  // recommend
+  rc: {
+    seeds: [],          // film_slugs
+    occLens: "all",
+  },
+};
+
+/* ============== BUILD INDEXES ============== */
+function build(rawData) {
+  const films = toObjects(rawData.films);
+  const visits = toObjects(rawData.visits);
+  const picks = toObjects(rawData.picks);
+
+  const filmBy = new Map(films.map(f => [f.film_slug, f]));
+  const visitBy = new Map(visits.map(v => [v.visit_slug, v]));
+
+  const picksByVisit = new Map();
+  const picksByFilm = new Map();
+  for (const p of picks) {
+    if (!picksByVisit.has(p.visit_slug)) picksByVisit.set(p.visit_slug, []);
+    picksByVisit.get(p.visit_slug).push(p);
+    if (!picksByFilm.has(p.film_slug)) picksByFilm.set(p.film_slug, []);
+    picksByFilm.get(p.film_slug).push(p);
+  }
+  // sort picks lists
+  for (const arr of picksByVisit.values()) arr.sort((a,b) => a.pick_order - b.pick_order);
+
+  // pre-compute per-film derived
+  for (const f of films) {
+    f._pickCount = (picksByFilm.get(f.film_slug) || []).length;
+    f._directors = splitList(f.directors);
+    f._countries = splitList(f.countries);
+    f._genres = splitList(f.genres);
+    f._themes = splitList(f.themes);
+    f._spoken = splitList(f.spoken_languages);
+    f._cast = splitList(f.top_cast);
+    f._decade = decadeOf(f.film_year);
+  }
+
+  // Per-visit derived: pick objects + picked films
+  for (const v of visits) {
+    const vp = picksByVisit.get(v.visit_slug) || [];
+    v._picks = vp;
+    v._films = vp.map(p => filmBy.get(p.film_slug)).filter(Boolean);
+  }
+
+  return { films, visits, picks, filmBy, visitBy, picksByVisit, picksByFilm };
+}
+
+function yearRange() {
+  const years = DB.visits.map(v => parseInt((v.visit_date || "").slice(-4), 10)).filter(Boolean);
+  return years.length ? `${Math.min(...years)}–${Math.max(...years)}` : "";
+}
+
+/* ============== CHARTS (small svg-free helpers) ============== */
+function topPickedFilms(n = 10) {
+  return DB.films
+    .filter(f => f._pickCount > 0)
+    .sort((a,b) => b._pickCount - a._pickCount || (a.film_title||"").localeCompare(b.film_title||""))
+    .slice(0, n);
+}
+function topDirectors(n = 10) {
+  const counts = new Map();
+  for (const f of DB.films) {
+    const c = f._pickCount;
+    if (!c) continue;
+    for (const d of f._directors) counts.set(d, (counts.get(d) || 0) + c);
+  }
+  return [...counts.entries()].sort((a,b) => b[1] - a[1]).slice(0, n);
+}
+function countryCounts() {
+  const counts = new Map();
+  for (const p of DB.picks) {
+    const f = DB.filmBy.get(p.film_slug); if (!f) continue;
+    for (const c of f._countries) counts.set(c, (counts.get(c) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a,b) => b[1] - a[1]);
+}
+function decadePickCounts() {
+  const counts = new Map();
+  for (const p of DB.picks) {
+    const f = DB.filmBy.get(p.film_slug); if (!f) continue;
+    if (f._decade == null) continue;
+    counts.set(f._decade, (counts.get(f._decade) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a,b) => a[0] - b[0]);
+}
+
+/* ============== ROUTING ============== */
+function readHash() {
+  const h = location.hash.replace(/^#/, "");
+  if (!h) return { view: "browse" };
+  const [view, ...rest] = h.split("/");
+  const out = { view: ["browse","visitors","recommend"].includes(view) ? view : "browse" };
+  if (out.view === "recommend" && rest.length) {
+    const seedsStr = decodeURIComponent(rest.join("/"));
+    if (seedsStr.startsWith("seeds=")) {
+      out.seeds = seedsStr.slice(6).split(",").filter(Boolean);
+    }
+  }
+  return out;
+}
+function writeHash() {
+  let h = STATE.view;
+  if (STATE.view === "recommend" && STATE.rc.seeds.length) {
+    h += "/seeds=" + STATE.rc.seeds.join(",");
+  }
+  history.replaceState(null, "", "#" + h);
+}
+function applyHash() {
+  const r = readHash();
+  STATE.view = r.view;
+  if (r.seeds) STATE.rc.seeds = r.seeds.filter(s => DB.filmBy.has(s));
+}
+
+/* ============== RENDER: SHELL ============== */
+function renderShell() {
+  const app = $("#app");
+  app.innerHTML = "";
+  const header = el("header", { class: "top" },
+    el("div", { class: "brand" },
+      el("div", { class: "mark" },
+        "The ", el("span", { class: "ornament" }, "✦"), "Closet"
+      ),
+      el("div", { class: "tagline" }, `Criterion's guests · ${yearRange()} · ${fmt(DB.visits.length)} visits · ${fmt(DB.picks.length)} picks`)
+    ),
+    el("nav", { class: "tabs" },
+      tabBtn("browse", "Browse"),
+      tabBtn("visitors", "Visitors"),
+      tabBtn("recommend", "Recommend")
+    )
+  );
+  const main = el("main", { id: "main" });
+  app.append(header, main, footerEl());
+  renderView();
+}
+function tabBtn(view, label) {
+  return el("button", {
+    class: STATE.view === view ? "is-active" : "",
+    onclick: () => { STATE.view = view; writeHash(); renderShell(); window.scrollTo({top:0,behavior:"smooth"}); }
+  }, label);
+}
+function footerEl() {
+  return el("footer", { class: "foot" },
+    el("div", {},
+      "A self-contained explorer · data scraped from Letterboxd's ",
+      el("a", { href: "https://letterboxd.com/closetpicks/", target: "_blank", rel: "noopener" }, "closetpicks list"),
+      ` · ${fmt(DB.films.length)} unique films across ${fmt(DB.visits.length)} visits`
+    ),
+    el("div", { class: "mono" }, "v1.0 · vanilla js · 0 dependencies")
+  );
+}
+
+/* ============== VIEW ROUTER ============== */
+function renderView() {
+  const main = $("#main");
+  main.innerHTML = "";
+  main.classList.remove("view");
+  // force reflow to retrigger animation
+  void main.offsetWidth;
+  main.classList.add("view");
+
+  if (STATE.view === "browse") renderBrowse(main);
+  else if (STATE.view === "visitors") renderVisitors(main);
+  else if (STATE.view === "recommend") renderRecommend(main);
+}
+
+/* ============== BROWSE ============== */
+function renderBrowse(root) {
+  // Hero strip
+  const hero = el("section", { class: "hero" },
+    el("div", {},
+      el("div", { class: "eyebrow" }, "An archive of taste"),
+      el("h1", { html: 'When the famous step into the closet,<br><span class="stroke">what do they take home?</span>' }),
+      el("p", { class: "lede" },
+        "Since 2010, Criterion has invited filmmakers, actors, musicians, designers, and other guests into a small room lined with their entire catalog. They get a few minutes to grab whatever they want. This is what they grabbed."
+      )
+    ),
+    el("aside", { class: "hero-stats" },
+      el("div", { class: "stat" }, el("span", { class: "num" }, fmt(DB.visits.length)), el("div", { class: "lab" }, "Visits")),
+      el("div", { class: "stat" }, el("span", { class: "num" }, fmt(DB.picks.length)), el("div", { class: "lab" }, "Total Picks")),
+      el("div", { class: "stat" }, el("span", { class: "num" }, fmt(DB.films.length)), el("div", { class: "lab" }, "Unique Films"))
+    )
+  );
+  root.append(hero);
+
+  // Charts strip
+  root.append(renderChartsStrip());
+
+  // Browse heading + filters + grid
+  const sectionH = el("div", { class: "section-h" },
+    el("div", { class: "label" },
+      el("span", { class: "eyebrow" }, "01 / Browse"),
+      el("h2", {}, "Every film, every angle")
+    ),
+    el("div", { class: "count", id: "browse-count" })
+  );
+  root.append(sectionH);
+  root.append(renderBrowseFilters());
+  root.append(renderBrowseSort());
+
+  const gridWrap = el("div", { id: "browse-grid-wrap" });
+  root.append(gridWrap);
+
+  paintBrowseGrid();
+}
+
+function renderChartsStrip() {
+  const strip = el("section", { class: "strip" });
+
+  // Top picked films
+  const tpf = topPickedFilms(10);
+  strip.append(el("div", { class: "panel" },
+    el("header", {},
+      el("span", { class: "title" }, "Most-picked films"),
+      el("span", { class: "hint" }, "n × picks")
+    ),
+    el("div", { class: "minilist" },
+      ...tpf.map((f, i) => el("div", {
+        class: "row",
+        onclick: () => openFilmModal(f.film_slug),
+      },
+        el("span", { class: "rank" }, String(i+1).padStart(2,"0")),
+        el("span", { class: "lbl" }, el("em", {}, f.film_title), " ", f.film_year ? `(${f.film_year})` : ""),
+        el("span", { class: "val" }, "× " + f._pickCount)
+      ))
+    )
+  ));
+
+  // Top directors
+  const td = topDirectors(10);
+  strip.append(el("div", { class: "panel" },
+    el("header", {},
+      el("span", { class: "title" }, "Most-picked directors"),
+      el("span", { class: "hint" }, "picks total")
+    ),
+    el("div", { class: "minilist" },
+      ...td.map(([name, n], i) => el("div", {
+        class: "row",
+        onclick: () => {
+          STATE.view = "browse";
+          STATE.bf.director = new Set([name]);
+          writeHash(); renderShell();
+        }
+      },
+        el("span", { class: "rank" }, String(i+1).padStart(2,"0")),
+        el("span", { class: "lbl" }, name),
+        el("span", { class: "val" }, "× " + n)
+      ))
+    )
+  ));
+
+  // Country bars
+  const cc = countryCounts().slice(0, 10);
+  const maxC = cc[0] ? cc[0][1] : 1;
+  strip.append(el("div", { class: "panel" },
+    el("header", {},
+      el("span", { class: "title" }, "By country of origin"),
+      el("span", { class: "hint" }, "% of top")
+    ),
+    el("div", {},
+      ...cc.map(([c, n]) => {
+        const row = el("div", { class: "bar-row" },
+          el("span", { class: "lbl", title: c }, c),
+          el("span", { class: "bar" }),
+          el("span", { class: "v" }, fmt(n))
+        );
+        row.querySelector(".bar").style.setProperty("--w", `${(n/maxC*100).toFixed(1)}%`);
+        row.style.cursor = "pointer";
+        row.addEventListener("click", () => {
+          STATE.view = "browse";
+          STATE.bf.country = new Set([c]);
+          writeHash(); renderShell();
+        });
+        return row;
+      })
+    )
+  ));
+
+  // Decade chart (svg)
+  const dec = decadePickCounts();
+  const decMax = Math.max(...dec.map(d => d[1]), 1);
+  const W = 280, H = 120;
+  const barW = W / dec.length - 6;
+  const svg = `
+    <svg viewBox="0 0 ${W} ${H+24}" class="decade-chart" xmlns="http://www.w3.org/2000/svg">
+      ${dec.map(([d,n], i) => {
+        const x = i * (W/dec.length) + 3;
+        const h = (n / decMax) * H;
+        const y = H - h;
+        return `
+          <g>
+            <rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="1" fill="url(#decGrad)"/>
+            <text x="${x + barW/2}" y="${H + 14}" text-anchor="middle" fill="#6b6354" font-family="JetBrains Mono, monospace" font-size="9">${String(d).slice(2)}'s</text>
+            <text x="${x + barW/2}" y="${y - 3}" text-anchor="middle" fill="#d6a445" font-family="JetBrains Mono, monospace" font-size="9">${n}</text>
+          </g>
+        `;
+      }).join("")}
+      <defs>
+        <linearGradient id="decGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#d6a445"/>
+          <stop offset="100%" stop-color="#8a6921"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  `;
+  strip.append(el("div", { class: "panel", html: `
+    <header><span class="title">Picks by film decade</span><span class="hint">when made</span></header>
+    ${svg}
+  ` }));
+
+  return strip;
+}
+
+function renderBrowseFilters() {
+  const bf = STATE.bf;
+  const wrap = el("div", { class: "filters" });
+
+  // Sets and value lists
+  const decades = [...new Set(DB.films.map(f => f._decade).filter(d => d != null))].sort((a,b) => a-b);
+  const countries = countCounts(DB.films, f => f._countries).slice(0, 18);
+  const genres = countCounts(DB.films, f => f._genres);
+  const themes = countCounts(DB.films, f => f._themes).filter(([_, n]) => n >= 8).slice(0, 18);
+  const languages = countCounts(DB.films, f => f.primary_language ? [f.primary_language] : []).slice(0, 12);
+  const directors = countDirectorsByPick().slice(0, 24);
+
+  wrap.append(chipGroup("Decade", decades.map(d => [String(d) + "s", d]), bf.decade, () => paintBrowseGrid()));
+  wrap.append(chipGroup("Genre", genres, bf.genre, () => paintBrowseGrid()));
+  wrap.append(chipGroup("Country", countries, bf.country, () => paintBrowseGrid()));
+  wrap.append(chipGroup("Language", languages, bf.language, () => paintBrowseGrid()));
+  wrap.append(chipGroup("Theme", themes, bf.theme, () => paintBrowseGrid()));
+  wrap.append(chipGroup("Director", directors, bf.director, () => paintBrowseGrid()));
+
+  // Range filters + search row
+  const rangeRow = el("div", { class: "filter-group", style: { flexBasis: "100%", flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: "18px" } });
+
+  // search
+  const searchInput = el("input", {
+    class: "filter-search",
+    type: "search",
+    placeholder: "Search title, director, cast…",
+    value: bf.search,
+    oninput: debounce((e) => { bf.search = e.target.value.toLowerCase(); paintBrowseGrid(); }, 180)
+  });
+  rangeRow.append(searchInput);
+
+  // min rating
+  const rrLabel = el("label", {}, "min rating");
+  const rrVal = el("span", { class: "v" }, bf.minRating.toFixed(1));
+  const rr = el("input", {
+    type: "range", min: "0", max: "5", step: "0.1", value: String(bf.minRating),
+    oninput: (e) => { bf.minRating = parseFloat(e.target.value); rrVal.textContent = bf.minRating.toFixed(1); paintBrowseGrid(); }
+  });
+  rangeRow.append(el("div", { class: "filter-range" }, rrLabel, rr, rrVal));
+
+  // max runtime
+  const mrLabel = el("label", {}, "max runtime");
+  const mrVal = el("span", { class: "v" }, bf.maxRuntime + "m");
+  const mr = el("input", {
+    type: "range", min: "60", max: "360", step: "10", value: String(bf.maxRuntime),
+    oninput: (e) => { bf.maxRuntime = parseInt(e.target.value); mrVal.textContent = bf.maxRuntime + "m"; paintBrowseGrid(); }
+  });
+  rangeRow.append(el("div", { class: "filter-range" }, mrLabel, mr, mrVal));
+
+  rangeRow.append(el("button", {
+    class: "filter-clear",
+    onclick: () => {
+      STATE.bf = { decade: new Set(), country: new Set(), genre: new Set(), theme: new Set(), director: new Set(), language: new Set(), minRating: 0, maxRuntime: 360, search: "", sort: bf.sort };
+      renderShell();
+    }
+  }, "Reset all"));
+
+  wrap.append(rangeRow);
+  return wrap;
+}
+
+function chipGroup(heading, items, set, onChange) {
+  const grp = el("div", { class: "filter-group" },
+    el("div", { class: "heading" }, heading)
+  );
+  const chipsEl = el("div", { class: "chips" });
+  for (const it of items) {
+    const [label, value, count] = Array.isArray(it) ? it : [it, it];
+    const v = value;
+    const isOn = set.has(v);
+    const c = el("button", {
+      class: "chip" + (isOn ? " is-on" : ""),
+      onclick: () => {
+        if (set.has(v)) set.delete(v); else set.add(v);
+        c.classList.toggle("is-on");
+        onChange();
+      }
+    }, label, count != null ? el("span", { class: "n" }, String(count)) : null);
+    chipsEl.append(c);
+  }
+  grp.append(chipsEl);
+  return grp;
+}
+
+function countCounts(films, accessor) {
+  const m = new Map();
+  for (const f of films) {
+    if (!f._pickCount) continue;
+    for (const v of accessor(f)) m.set(v, (m.get(v) || 0) + f._pickCount);
+  }
+  return [...m.entries()].sort((a,b) => b[1] - a[1]).map(([v, n]) => [v, v, n]);
+}
+function countDirectorsByPick() {
+  const m = new Map();
+  for (const f of DB.films) {
+    if (!f._pickCount) continue;
+    for (const d of f._directors) m.set(d, (m.get(d) || 0) + f._pickCount);
+  }
+  return [...m.entries()].sort((a,b) => b[1] - a[1]).map(([v, n]) => [v, v, n]);
+}
+
+function renderBrowseSort() {
+  const row = el("div", { class: "sort-row" },
+    el("span", { class: "lab" }, "Sort by"),
+    el("select", {
+      onchange: (e) => { STATE.bf.sort = e.target.value; paintBrowseGrid(); }
+    },
+      el("option", { value: "picks" + (STATE.bf.sort === "picks" ? "" : ""), selected: STATE.bf.sort === "picks" }, "Most picked"),
+      el("option", { value: "rating", selected: STATE.bf.sort === "rating" }, "Highest rated"),
+      el("option", { value: "year_desc", selected: STATE.bf.sort === "year_desc" }, "Newest"),
+      el("option", { value: "year_asc", selected: STATE.bf.sort === "year_asc" }, "Oldest"),
+      el("option", { value: "title", selected: STATE.bf.sort === "title" }, "Title (A–Z)")
+    )
+  );
+  return row;
+}
+
+function applyBrowseFilters(films) {
+  const bf = STATE.bf;
+  const search = bf.search;
+  return films.filter(f => {
+    if (!f._pickCount) return false;
+    if (bf.decade.size && !bf.decade.has(f._decade)) return false;
+    if (bf.country.size && !f._countries.some(c => bf.country.has(c))) return false;
+    if (bf.genre.size && !f._genres.some(g => bf.genre.has(g))) return false;
+    if (bf.theme.size && !f._themes.some(t => bf.theme.has(t))) return false;
+    if (bf.director.size && !f._directors.some(d => bf.director.has(d))) return false;
+    if (bf.language.size && !bf.language.has(f.primary_language)) return false;
+    if (bf.minRating > 0 && (f.avg_rating == null || f.avg_rating < bf.minRating)) return false;
+    if (bf.maxRuntime < 360 && f.runtime_min != null && f.runtime_min > bf.maxRuntime) return false;
+    if (search) {
+      const hay = (f.film_title + " " + (f.directors||"") + " " + (f.top_cast||"")).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function sortFilms(films, key) {
+  const arr = films.slice();
+  if (key === "picks")     arr.sort((a,b) => b._pickCount - a._pickCount || (a.film_title||"").localeCompare(b.film_title||""));
+  else if (key === "rating") arr.sort((a,b) => (b.avg_rating ?? -1) - (a.avg_rating ?? -1));
+  else if (key === "year_desc") arr.sort((a,b) => (b.film_year ?? 0) - (a.film_year ?? 0));
+  else if (key === "year_asc")  arr.sort((a,b) => (a.film_year ?? 9999) - (b.film_year ?? 9999));
+  else if (key === "title")     arr.sort((a,b) => (a.film_title||"").localeCompare(b.film_title||""));
+  return arr;
+}
+
+function paintBrowseGrid() {
+  const wrap = $("#browse-grid-wrap");
+  if (!wrap) return;
+  let films = applyBrowseFilters(DB.films);
+  films = sortFilms(films, STATE.bf.sort);
+  const cap = 240;
+  const total = films.length;
+  const shown = films.slice(0, cap);
+
+  $("#browse-count").textContent = total === DB.films.length
+    ? `${fmt(total)} films`
+    : `${fmt(total)} match${total===1 ? "" : "es"} of ${fmt(DB.films.length)}`;
+
+  wrap.innerHTML = "";
+  if (!shown.length) {
+    wrap.append(el("div", { class: "empty-state" }, "No films match those filters."));
+    return;
+  }
+  const grid = el("div", { class: "poster-grid" });
+  for (const f of shown) grid.append(posterCard(f, { showPickCount: true }));
+  wrap.append(grid);
+
+  if (total > cap) {
+    wrap.append(el("div", {
+      style: { textAlign: "center", padding: "26px", fontFamily: "var(--mono)", fontSize: "11px", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--ink-faint)" }
+    }, `Showing top ${cap} of ${fmt(total)} · refine to see more`));
+  }
+}
+
+function posterCard(film, opts = {}) {
+  const card = el("div", {
+    class: "poster-card",
+    onclick: opts.onClick || (() => openFilmModal(film.film_slug)),
+    title: opts.title || null
+  });
+  const wrap = el("div", { class: "poster-wrap" });
+  const placeholder = el("div", { class: "placeholder" }, film.film_title);
+  wrap.append(placeholder);
+  if (film.poster_url) {
+    const img = el("img", {
+      alt: film.film_title,
+      loading: "lazy",
+      decoding: "async",
+    });
+    img.dataset.src = film.poster_url;
+    wrap.append(img);
+    posterObserver.observe(img);
+  }
+  if (opts.showPickCount && film._pickCount) {
+    wrap.append(el("div", { class: "badge" }, "× " + film._pickCount));
+  }
+  if (opts.recoTag) {
+    wrap.append(el("div", { class: "reco-tag", html: opts.recoTag }));
+  }
+  card.append(wrap);
+  card.append(el("div", { class: "meta" },
+    el("span", { class: "ttl" }, film.film_title),
+    el("span", { class: "yr" }, film.film_year || "")
+  ));
+  return card;
+}
+
+/* ============== VISITORS ============== */
+function renderVisitors(root) {
+  // header
+  root.append(el("div", { class: "section-h" },
+    el("div", { class: "label" },
+      el("span", { class: "eyebrow" }, "02 / Visitors"),
+      el("h2", {}, `${fmt(DB.visits.length)} guests, one closet`)
+    ),
+    el("div", { class: "count" }, fmt(DB.visits.length) + " visits · " + yearRange())
+  ));
+
+  // superlatives
+  root.append(renderSuperlatives());
+
+  // filter bar
+  const occCounts = new Map();
+  for (const v of DB.visits) {
+    const o = (v.occupation_guess || "").toLowerCase().trim();
+    const k = o || "(unspecified)";
+    occCounts.set(k, (occCounts.get(k) || 0) + 1);
+  }
+  const occList = [...occCounts.entries()].sort((a,b) => b[1] - a[1]);
+  const filtRow = el("div", { class: "filters" });
+
+  // Occupation chips: "all" + top occupations
+  const occGroup = el("div", { class: "filter-group" }, el("div", { class: "heading" }, "Occupation"));
+  const chipsEl = el("div", { class: "chips" });
+  const allChip = el("button", {
+    class: "chip" + (STATE.vf.occ === "all" ? " is-on" : ""),
+    onclick: () => { STATE.vf.occ = "all"; renderShell(); }
+  }, "All", el("span", { class: "n" }, fmt(DB.visits.length)));
+  chipsEl.append(allChip);
+  for (const [occ, n] of occList.filter(([_,n]) => n >= 2).slice(0, 16)) {
+    const ch = el("button", {
+      class: "chip" + (STATE.vf.occ === occ ? " is-on" : ""),
+      onclick: () => { STATE.vf.occ = occ; renderShell(); }
+    }, occ, el("span", { class: "n" }, fmt(n)));
+    chipsEl.append(ch);
+  }
+  occGroup.append(chipsEl);
+  filtRow.append(occGroup);
+
+  // search
+  const searchGrp = el("div", { class: "filter-group", style: { flex: "1", minWidth: "200px" } },
+    el("div", { class: "heading" }, "Search visitor"),
+    el("input", {
+      class: "filter-search",
+      type: "search",
+      placeholder: "Type a name…",
+      value: STATE.vf.search,
+      oninput: debounce((e) => { STATE.vf.search = e.target.value.toLowerCase(); paintVisitorGrid(); }, 180)
+    })
+  );
+  filtRow.append(searchGrp);
+
+  root.append(filtRow);
+  const wrap = el("div", { id: "visitor-grid-wrap" });
+  root.append(wrap);
+  paintVisitorGrid();
+}
+
+function paintVisitorGrid() {
+  const wrap = $("#visitor-grid-wrap");
+  if (!wrap) return;
+  const vf = STATE.vf;
+  const filtered = DB.visits.filter(v => {
+    const occ = (v.occupation_guess || "").toLowerCase().trim() || "(unspecified)";
+    if (vf.occ !== "all" && vf.occ !== occ) return false;
+    if (vf.search && !(v.visitor || "").toLowerCase().includes(vf.search)) return false;
+    return true;
+  });
+  // sort: by year desc, then num_films desc
+  filtered.sort((a,b) => {
+    const ay = parseDateYear(a.visit_date), by = parseDateYear(b.visit_date);
+    return (by ?? 0) - (ay ?? 0) || (b.num_films - a.num_films);
+  });
+
+  wrap.innerHTML = "";
+  const grid = el("div", { class: "visitor-grid" });
+  for (const v of filtered) grid.append(visitorCard(v));
+  wrap.append(grid);
+
+  if (!filtered.length) {
+    wrap.innerHTML = "";
+    wrap.append(el("div", { class: "empty-state" }, "No visitors match those filters."));
+  }
+}
+
+function visitorCard(v) {
+  return el("div", {
+    class: "visitor-card",
+    onclick: () => openVisitorModal(v.visit_slug)
+  },
+    el("div", { class: "occ" }, v.occupation_guess || "—"),
+    el("div", { class: "name" }, v.visitor),
+    el("div", { class: "date" }, v.visit_date || ""),
+    el("div", { class: "nfilms" }, el("strong", {}, fmt(v.num_films)), " films picked")
+  );
+}
+
+function parseDateYear(s) {
+  if (!s) return null;
+  const m = s.match(/(\d{4})/);
+  return m ? parseInt(m[1]) : null;
+}
+
+/* ----- superlatives ----- */
+function computeSuperlatives() {
+  // Most films
+  let mostFilms = null;
+  // Most international (most countries represented)
+  let mostIntl = null, mostIntlN = -1;
+  // Lowest median rating count = most obscure
+  let mostObscure = null, mostObscureMedian = Infinity;
+  // Most into themes (highest avg # of themes per film picked)
+  let deepestThemes = null, deepestThemesAvg = -1;
+
+  for (const v of DB.visits) {
+    const films = v._films;
+    if (films.length < 3) continue; // ignore tiny visits for fairness
+
+    if (!mostFilms || films.length > mostFilms._films.length) mostFilms = v;
+
+    const cset = new Set();
+    for (const f of films) for (const c of f._countries) cset.add(c);
+    if (cset.size > mostIntlN) { mostIntl = v; mostIntlN = cset.size; }
+
+    const counts = films.map(f => f.rating_count).filter(n => n != null).sort((a,b) => a-b);
+    if (counts.length >= 3) {
+      const med = counts[Math.floor(counts.length/2)];
+      if (med < mostObscureMedian) { mostObscure = v; mostObscureMedian = med; }
+    }
+
+    const tCounts = films.map(f => f._themes.length);
+    if (tCounts.length) {
+      const avg = tCounts.reduce((a,b) => a+b, 0) / tCounts.length;
+      if (avg > deepestThemesAvg) { deepestThemes = v; deepestThemesAvg = avg; }
+    }
+  }
+  return { mostFilms, mostIntl, mostIntlN, mostObscure, mostObscureMedian, deepestThemes, deepestThemesAvg };
+}
+
+function renderSuperlatives() {
+  const s = computeSuperlatives();
+  const strip = el("div", { class: "superlatives" });
+  if (s.mostFilms) {
+    strip.append(superCard("Greediest in the closet", s.mostFilms.visitor, `${fmt(s.mostFilms._films.length)} films picked`, s.mostFilms.visit_slug));
+  }
+  if (s.mostIntl) {
+    strip.append(superCard("Most international taste", s.mostIntl.visitor, `${s.mostIntlN} countries represented`, s.mostIntl.visit_slug));
+  }
+  if (s.mostObscure) {
+    strip.append(superCard("Most obscure taste", s.mostObscure.visitor, `median ${fmt(s.mostObscureMedian)} ratings · the deep cuts`, s.mostObscure.visit_slug));
+  }
+  if (s.deepestThemes) {
+    strip.append(superCard("Deepest art-house signature", s.deepestThemes.visitor, `${s.deepestThemesAvg.toFixed(1)} themes per film picked`, s.deepestThemes.visit_slug));
+  }
+  return strip;
+}
+function superCard(award, winner, meta, slug) {
+  return el("div", {
+    class: "superlative",
+    onclick: () => openVisitorModal(slug)
+  },
+    el("div", { class: "award" }, award),
+    el("div", { class: "winner" }, winner),
+    el("div", { class: "meta" }, meta)
+  );
+}
+
+/* ============== RECOMMEND ============== */
+function renderRecommend(root) {
+  root.append(el("div", { class: "section-h" },
+    el("div", { class: "label" },
+      el("span", { class: "eyebrow" }, "03 / Recommend"),
+      el("h2", {}, "Tell us a film, we'll tell you a closet")
+    ),
+    el("div", { class: "count" }, "co-pick collaborative filtering")
+  ));
+
+  const builder = el("div", { class: "reco-builder" });
+  builder.append(el("div", { class: "head" },
+    el("h3", {}, "Seed films"),
+    el("div", { class: "eyebrow" }, "add a few you love")
+  ));
+
+  // search
+  const searchWrap = el("div", { class: "reco-search-wrap" });
+  const input = el("input", {
+    class: "reco-search",
+    type: "search",
+    placeholder: "Search a film picked in the closet (e.g. Persona, Stalker, Chungking Express)…",
+    autocomplete: "off",
+  });
+  const suggest = el("div", { class: "reco-suggest hidden" });
+  searchWrap.append(input, suggest);
+
+  // suggestion behavior
+  let activeIdx = -1;
+  let currentMatches = [];
+  const updateSuggest = () => {
+    const q = input.value.trim().toLowerCase();
+    if (q.length < 2) { suggest.classList.add("hidden"); return; }
+    const matches = DB.films
+      .filter(f => f._pickCount > 0 && f.film_title.toLowerCase().includes(q))
+      .filter(f => !STATE.rc.seeds.includes(f.film_slug))
+      .sort((a,b) => b._pickCount - a._pickCount)
+      .slice(0, 12);
+    currentMatches = matches;
+    activeIdx = -1;
+    suggest.innerHTML = "";
+    if (!matches.length) { suggest.classList.add("hidden"); return; }
+    matches.forEach((f, i) => {
+      const item = el("div", {
+        class: "item",
+        onclick: () => addSeed(f.film_slug)
+      },
+        el("span", { class: "ttl" }, el("em", {}, f.film_title), f.directors ? ` · ${f.directors.split(";")[0]}` : ""),
+        el("span", { class: "yr" }, f.film_year || "")
+      );
+      suggest.append(item);
+    });
+    suggest.classList.remove("hidden");
+  };
+  input.addEventListener("input", debounce(updateSuggest, 80));
+  input.addEventListener("focus", updateSuggest);
+  input.addEventListener("blur", () => setTimeout(() => suggest.classList.add("hidden"), 180));
+  input.addEventListener("keydown", (e) => {
+    const items = $$(".item", suggest);
+    if (e.key === "ArrowDown") { e.preventDefault(); activeIdx = Math.min(items.length-1, activeIdx+1); updateActive(items); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); activeIdx = Math.max(0, activeIdx-1); updateActive(items); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      const f = activeIdx >= 0 ? currentMatches[activeIdx] : currentMatches[0];
+      if (f) addSeed(f.film_slug);
+    }
+    else if (e.key === "Escape") suggest.classList.add("hidden");
+  });
+  function updateActive(items) {
+    items.forEach((it, i) => it.classList.toggle("is-active", i === activeIdx));
+  }
+
+  builder.append(searchWrap);
+
+  // seeds row
+  const seedsEl = el("div", { class: "seeds", id: "seeds" });
+  builder.append(seedsEl);
+
+  // controls
+  const controls = el("div", { class: "reco-controls" },
+    el("div", {},
+      el("label", { class: "lab" }, "By-occupation lens"),
+      el("select", {
+        id: "occ-lens",
+        onchange: (e) => { STATE.rc.occLens = e.target.value; paintReco(); }
+      }, ...renderOccLensOptions())
+    ),
+    el("div", {},
+      el("button", {
+        class: "filter-clear",
+        onclick: () => {
+          STATE.rc.seeds = [];
+          STATE.rc.occLens = "all";
+          writeHash(); renderShell();
+        }
+      }, "Clear seeds")
+    )
+  );
+  builder.append(controls);
+  root.append(builder);
+
+  // recommendations area
+  const recoArea = el("div", { id: "reco-area" });
+  root.append(recoArea);
+
+  function addSeed(slug) {
+    if (!STATE.rc.seeds.includes(slug)) STATE.rc.seeds.push(slug);
+    input.value = "";
+    suggest.classList.add("hidden");
+    writeHash();
+    paintSeeds();
+    paintReco();
+  }
+  // expose for click-to-add-seed from reco card
+  window._addSeed = addSeed;
+
+  paintSeeds();
+  paintReco();
+}
+
+function renderOccLensOptions() {
+  // Compute occupation distribution
+  const m = new Map();
+  for (const v of DB.visits) {
+    const o = (v.occupation_guess || "").toLowerCase().trim();
+    if (!o) continue;
+    m.set(o, (m.get(o) || 0) + 1);
+  }
+  const opts = [el("option", { value: "all", selected: STATE.rc.occLens === "all" }, "All visitors")];
+  const arr = [...m.entries()].sort((a,b) => b[1] - a[1]).filter(([_, n]) => n >= 3).slice(0, 14);
+  for (const [occ, n] of arr) {
+    opts.push(el("option", { value: occ, selected: STATE.rc.occLens === occ }, `${occ}s (${n})`));
+  }
+  return opts;
+}
+
+function paintSeeds() {
+  const wrap = $("#seeds");
+  wrap.innerHTML = "";
+  if (!STATE.rc.seeds.length) {
+    wrap.append(el("span", { class: "seeds-empty" }, "No seeds yet — search above and pick a few you love."));
+    return;
+  }
+  for (const slug of STATE.rc.seeds) {
+    const f = DB.filmBy.get(slug);
+    if (!f) continue;
+    wrap.append(el("span", { class: "seed" },
+      f.film_title,
+      el("span", {
+        class: "x", title: "Remove",
+        onclick: () => {
+          STATE.rc.seeds = STATE.rc.seeds.filter(s => s !== slug);
+          writeHash(); paintSeeds(); paintReco();
+        }
+      }, "×")
+    ));
+  }
+}
+
+function computeRecommendations() {
+  const seedSet = new Set(STATE.rc.seeds);
+  if (!seedSet.size) return [];
+
+  // Find visitors who picked at least one seed
+  const overlapByVisit = new Map();
+  for (const slug of seedSet) {
+    const ps = DB.picksByFilm.get(slug) || [];
+    for (const p of ps) {
+      overlapByVisit.set(p.visit_slug, (overlapByVisit.get(p.visit_slug) || 0) + 1);
+    }
+  }
+  if (!overlapByVisit.size) return [];
+
+  // Optional occupation filter
+  const lens = STATE.rc.occLens;
+  // For each candidate visitor (with overlap), iterate their picks and score
+  const scoreByFilm = new Map();
+  const supportByFilm = new Map(); // # of overlapping visitors who picked it
+  const becauseByFilm = new Map(); // map: film_slug -> seed_slug that drove top pick (rough "because you like X")
+
+  for (const [vSlug, overlapCount] of overlapByVisit) {
+    const visit = DB.visitBy.get(vSlug);
+    if (!visit) continue;
+    if (lens !== "all") {
+      const occ = (visit.occupation_guess || "").toLowerCase().trim();
+      if (occ !== lens) continue;
+    }
+    const totalPicks = visit._picks.length || 1;
+    // weight: overlap-count squared / totalPicks → rewards visitors with high overlap & focused taste
+    const weight = (overlapCount * overlapCount) / totalPicks;
+
+    for (const p of visit._picks) {
+      if (seedSet.has(p.film_slug)) continue;
+      scoreByFilm.set(p.film_slug, (scoreByFilm.get(p.film_slug) || 0) + weight);
+      supportByFilm.set(p.film_slug, (supportByFilm.get(p.film_slug) || 0) + 1);
+
+      // Also record which seed(s) this visitor picked, for "because you like…" tag
+      // We pick the most-loved seed (highest pick_count among the seeds this visitor took)
+      if (!becauseByFilm.has(p.film_slug)) {
+        // Find seeds this visitor picked
+        const seedsThisVisitor = visit._picks.filter(pp => seedSet.has(pp.film_slug));
+        if (seedsThisVisitor.length) {
+          // pick the seed with highest overall pick_count (most-loved seed among shared)
+          let best = seedsThisVisitor[0].film_slug, bestN = -1;
+          for (const sp of seedsThisVisitor) {
+            const sc = (DB.filmBy.get(sp.film_slug)?._pickCount) || 0;
+            if (sc > bestN) { best = sp.film_slug; bestN = sc; }
+          }
+          becauseByFilm.set(p.film_slug, best);
+        }
+      }
+    }
+  }
+
+  const ranked = [...scoreByFilm.entries()].map(([slug, score]) => ({
+    slug,
+    score,
+    support: supportByFilm.get(slug) || 0,
+    because: becauseByFilm.get(slug) || null,
+  }));
+  ranked.sort((a,b) => b.score - a.score || b.support - a.support);
+  return ranked.slice(0, 30);
+}
+
+function paintReco() {
+  const area = $("#reco-area");
+  if (!area) return;
+  area.innerHTML = "";
+  if (!STATE.rc.seeds.length) {
+    area.append(el("div", { class: "reco-empty" }, "Add a film or two above. We'll find every visitor who picked it, then rank what those visitors also picked."));
+    return;
+  }
+  const recos = computeRecommendations();
+  if (!recos.length) {
+    area.append(el("div", { class: "reco-empty" }, "No overlapping visitors found for that combination. Try removing a seed or broadening the occupation lens."));
+    return;
+  }
+
+  // Header explaining the math
+  const hdr = el("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "12px 0 16px", flexWrap: "wrap", gap: "10px" } },
+    el("div", { class: "eyebrow" }, `${recos.length} recommendations · click to add as a seed`),
+    el("div", { class: "eyebrow", style: { color: "var(--ink-faint)" } }, "score = Σ(overlap² / total picks) per overlapping visitor")
+  );
+  area.append(hdr);
+
+  const grid = el("div", { class: "poster-grid" });
+  for (const r of recos) {
+    const f = DB.filmBy.get(r.slug);
+    if (!f) continue;
+    const seedFilm = r.because ? DB.filmBy.get(r.because) : null;
+    const tag = seedFilm
+      ? `<em>${safeHtml(seedFilm.film_title)}</em><br>picked by ${r.support} visitor${r.support===1?"":"s"} who took it`
+      : `picked by ${r.support} visitor${r.support===1?"":"s"} of yours`;
+    const card = posterCard(f, {
+      recoTag: tag,
+      title: "Click to add as seed · Shift-click to view details",
+      onClick: (e) => {
+        if (e.shiftKey) { openFilmModal(f.film_slug); return; }
+        window._addSeed(f.film_slug);
+      }
+    });
+    grid.append(card);
+  }
+  area.append(grid);
+}
+
+/* ============== MODALS ============== */
+function closeModal() {
+  $("#modal-mount").innerHTML = "";
+  document.body.style.overflow = "";
+}
+function showModal(content) {
+  document.body.style.overflow = "hidden";
+  const back = el("div", { class: "modal-back", onclick: (e) => { if (e.target === back) closeModal(); } },
+    el("div", { class: "modal" },
+      el("div", { class: "close", onclick: closeModal, html: "×" }),
+      content
+    )
+  );
+  $("#modal-mount").innerHTML = "";
+  $("#modal-mount").append(back);
+}
+
+function openFilmModal(slug) {
+  const f = DB.filmBy.get(slug);
+  if (!f) return;
+  const picks = (DB.picksByFilm.get(slug) || []).slice();
+  picks.sort((a,b) => {
+    const va = DB.visitBy.get(a.visit_slug), vb = DB.visitBy.get(b.visit_slug);
+    return (parseDateYear(vb?.visit_date) ?? 0) - (parseDateYear(va?.visit_date) ?? 0);
+  });
+
+  const pcol = el("div", { class: "pcol" });
+  const poster = el("div", { class: "poster" });
+  if (f.poster_url) {
+    const img = el("img", { alt: f.film_title, loading: "lazy" });
+    img.src = f.poster_url;
+    poster.append(img);
+  } else {
+    poster.append(el("div", { class: "placeholder", style: { padding: "20px" } }, f.film_title));
+  }
+  pcol.append(poster);
+
+  const pmeta = el("div", { class: "pmeta" });
+  if (f.runtime_min) pmeta.append(metaRow("Runtime", `${f.runtime_min} min`));
+  if (f.avg_rating != null) pmeta.append(metaRow("Rating", `★ ${f.avg_rating.toFixed(2)} · ${fmt(f.rating_count)} on Letterboxd`));
+  if (f.primary_language) pmeta.append(metaRow("Language", f.primary_language));
+  if (f.countries) pmeta.append(metaRow("Country", splitList(f.countries).join(" · ")));
+  if (f.studios) pmeta.append(metaRow("Studio", splitList(f.studios).slice(0, 2).join(" · ")));
+  pmeta.append(metaRow("Picked", `× ${f._pickCount} time${f._pickCount===1?"":"s"}`));
+  pcol.append(pmeta);
+
+  const info = el("div", { class: "info" },
+    el("h3", {}, f.film_title),
+    el("div", { class: "yr-dir" },
+      f.film_year ? el("span", { class: "yr" }, String(f.film_year)) : null,
+      f.film_year && f.directors ? "  ·  " : null,
+      f.directors ? "dir. " + splitList(f.directors).join(", ") : null
+    ),
+    f.synopsis ? el("p", { class: "synopsis" }, f.synopsis) : null,
+    f.genres ? tagRow("Genres", splitList(f.genres)) : null,
+    f.themes ? tagRow("Themes", splitList(f.themes)) : null,
+    f.top_cast ? tagRow("Cast", splitList(f.top_cast).slice(0, 8)) : null,
+    el("div", { class: "picked-by" },
+      el("h4", {}, "Picked by ", el("span", { class: "n" }, fmt(f._pickCount)), " visitor", f._pickCount===1?"":"s"),
+      el("div", { class: "list" },
+        ...picks.map(p => {
+          const v = DB.visitBy.get(p.visit_slug);
+          if (!v) return null;
+          return el("span", {
+            class: "pb",
+            onclick: () => openVisitorModal(v.visit_slug)
+          },
+            v.visitor,
+            v.occupation_guess ? el("span", { class: "occ" }, " · " + v.occupation_guess) : null
+          );
+        })
+      )
+    )
+  );
+
+  showModal(el("div", { class: "film-modal" }, pcol, info));
+}
+function metaRow(k, v) {
+  return el("div", { class: "row" },
+    el("span", { class: "k" }, k),
+    el("span", { class: "v" }, v)
+  );
+}
+function tagRow(label, items) {
+  if (!items.length) return null;
+  return el("div", { class: "tag-row" },
+    el("span", { class: "lab" }, label),
+    ...items.map(t => el("span", { class: "tag" }, t))
+  );
+}
+
+function openVisitorModal(slug) {
+  const v = DB.visitBy.get(slug);
+  if (!v) return;
+  const films = v._films;
+
+  const head = el("div", { class: "vhead" },
+    el("h3", {}, v.visitor),
+    el("div", { class: "vmeta" },
+      v.occupation_guess ? el("span", { class: "occ-tag" }, v.occupation_guess) : null,
+      v.visit_date || ""
+    )
+  );
+
+  // links
+  const links = el("div", { class: "links" });
+  if (v.youtube_url) links.append(el("a", { href: v.youtube_url, target: "_blank", rel: "noopener" }, "▶ Watch on YouTube"));
+  if (v.visit_url) links.append(el("a", { href: v.visit_url, target: "_blank", rel: "noopener" }, "Letterboxd list"));
+  if (v.criterion_shop_url) links.append(el("a", { href: v.criterion_shop_url, target: "_blank", rel: "noopener" }, "Criterion shop"));
+
+  // visitor stats
+  const cset = new Set();
+  for (const f of films) for (const c of f._countries) cset.add(c);
+  const ratings = films.map(f => f.avg_rating).filter(r => r != null);
+  const avgR = ratings.length ? ratings.reduce((a,b) => a+b, 0) / ratings.length : null;
+  const decadesSet = new Set(films.map(f => f._decade).filter(d => d != null));
+
+  const vstats = el("div", { class: "vstats" },
+    el("div", { class: "s" }, el("span", { class: "num" }, fmt(films.length)), el("div", { class: "lab" }, "films")),
+    el("div", { class: "s" }, el("span", { class: "num" }, fmt(cset.size)), el("div", { class: "lab" }, "countries")),
+    el("div", { class: "s" }, el("span", { class: "num" }, fmt(decadesSet.size)), el("div", { class: "lab" }, "decades")),
+    avgR != null ? el("div", { class: "s" }, el("span", { class: "num" }, "★ " + avgR.toFixed(2)), el("div", { class: "lab" }, "avg rating")) : null
+  );
+
+  // pick grid (in pick_order)
+  const picks = v._picks;
+  const pgrid = el("div", { class: "pgrid" });
+  for (const p of picks) {
+    const f = DB.filmBy.get(p.film_slug);
+    if (!f) continue;
+    const pic = el("div", {
+      class: "pic",
+      title: f.film_title + (f.film_year ? ` (${f.film_year})` : ""),
+      onclick: () => openFilmModal(p.film_slug)
+    });
+    pic.append(el("div", { class: "ord" }, String(p.pick_order)));
+    // Always append the title fallback first; image overlays it when loaded.
+    pic.append(el("div", { class: "ttl-fall" }, f.film_title));
+    if (f.poster_url) {
+      const img = el("img", { alt: f.film_title, loading: "lazy", decoding: "async" });
+      img.dataset.src = f.poster_url;
+      pic.append(img);
+      // load immediately in modal (small set)
+      img.src = f.poster_url;
+      img.addEventListener("load", () => img.classList.add("loaded"), { once: true });
+    }
+    pgrid.append(pic);
+  }
+
+  showModal(el("div", { class: "visitor-modal" },
+    head,
+    v.description ? el("p", { class: "desc" }, v.description) : null,
+    links,
+    vstats,
+    pgrid
+  ));
+}
+
+/* keyboard */
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("#modal-mount").firstChild) closeModal();
+});
+
+/* ============== BOOT ============== */
+(async function() {
+  try {
+    const t0 = performance.now();
+    const raw = await decode(DATA_B64);
+    DB = build(raw);
+    console.log(`Loaded ${DB.films.length} films, ${DB.visits.length} visits, ${DB.picks.length} picks in ${(performance.now()-t0).toFixed(0)}ms`);
+    applyHash();
+    renderShell();
+    window.addEventListener("hashchange", () => { applyHash(); renderShell(); });
+  } catch (err) {
+    console.error(err);
+    $("#app").innerHTML = `<div class="loading"><div class="reel" style="border-top-color:var(--crimson)"></div><p>Decode failed: ${safeHtml(err.message)}</p></div>`;
+  }
+})();
+</script>
+</body>
+</html>

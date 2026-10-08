@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Rebuild, then run unit, round-trip and (when playwright is installed) browser checks.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+python3 scripts/build.py
+python3 -m unittest discover -s tests -v
