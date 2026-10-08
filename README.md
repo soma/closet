@@ -12,3 +12,5 @@ Criterion Closet picks explorer: one self-contained page, vanilla JS.
 Quick start: `make help`. To refresh the data from your own machine: `make refresh`.
 
 For the Pages upload, build with the page address so the share icon copies the right link: `PAGES_URL=<the Pages share URL> make build`, then upload `dist/`. The address contains a token, so it is only baked into `dist/index.html`, never the committed `index.html`.
+
+Posters in the Pages app: Pages blocks hotlinked images, so `make posters` (needs `make setup` once) packs them into sprite sheets in `.cache/posters/sheets/`, which are uploaded to the page as assets (not committed); the small `data/posters.json` map is committed.

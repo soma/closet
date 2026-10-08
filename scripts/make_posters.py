@@ -37,7 +37,7 @@ def thumb(data):
     else:                                       # too tall: crop top and bottom
         nh = round(w * THUMB_H / THUMB_W)
         im = im.crop((0, (h - nh) // 2, w, (h - nh) // 2 + nh))
-    return im.resize((THUMB_W, THUMB_H), Image.LANCZOS)
+    return im.resize((THUMB_W, THUMB_H), Image.Resampling.LANCZOS)
 
 
 def download(url):

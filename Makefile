@@ -1,6 +1,6 @@
 DELAY ?= 3
 
-.PHONY: help setup fetch merge build backfill-imdb refresh test
+.PHONY: help setup fetch merge build backfill-imdb posters refresh test
 
 help:
 	@echo "make setup    one-time: venv, playwright, chromium (only needed for tests)"
@@ -8,6 +8,7 @@ help:
 	@echo "make merge    validate and merge new.json into data/closet.json"
 	@echo "make build    regenerate index.html and dist/index.html"
 	@echo "make backfill-imdb  fill blank imdb_id values from Wikidata (slow: it obeys Wikidata's rate limit)"
+	@echo "make posters  download posters and pack the sprite sheets (.cache/posters/sheets) for the Pages app"
 	@echo "make refresh  fetch + merge + build + test"
 	@echo "make test     run script/test"
 
@@ -25,6 +26,9 @@ merge:
 
 build:
 	python3 scripts/build.py
+
+posters:
+	.venv/bin/python scripts/make_posters.py
 
 backfill-imdb:
 	cd scripts && python3 backfill_imdb.py --delay 62

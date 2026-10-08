@@ -31,8 +31,21 @@ class BuiltPage(unittest.TestCase):
         html = build.build()
         blob = re.search(r'const DATA_B64 = "([^"]*)";', html).group(1)
         self.assertEqual(json.loads(gzip.decompress(base64.b64decode(blob))), DATA)
+        def decoded(path):
+            page = (ROOT / path).read_text(encoding="utf-8")
+            return json.loads(gzip.decompress(base64.b64decode(re.search(r'const DATA_B64 = "([^"]*)";', page).group(1)))), page
+        posters = ROOT / "data/posters.json"
         for target in ("index.html", "dist/index.html"):
-            self.assertEqual((ROOT / target).read_text(encoding="utf-8"), html)
+            data, page = decoded(target)
+            self.assertEqual(data, DATA, target)
+        # the GitHub Pages file always hotlinks; the Pages upload carries the sprite map when there is one
+        self.assertIn("const POSTER_MAP = null;", decoded("index.html")[1])
+        dist = decoded("dist/index.html")[1]
+        if posters.exists():
+            self.assertIn("const POSTER_MAP = " + posters.read_text(encoding="utf-8").strip() + ";", dist)
+        else:
+            self.assertIn("const POSTER_MAP = null;", dist)
+        self.assertEqual(decoded("index.html")[1], html)
 
 
 class PageUrl(unittest.TestCase):
