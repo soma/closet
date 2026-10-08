@@ -250,9 +250,37 @@ class Smoke(unittest.TestCase):
             browser, page, errors = self.open_link(p, "#clubs/id1")
             page.wait_for_selector("#main h2:has-text('Preset Club')")
             self.assertEqual(page.evaluate("location.hash"), "#clubs/id1")
-            self.assertIn("#clubs/id1", page.inner_text(".club-link"))
+            self.assertEqual(page.locator(".club-link").count(), 0, "no long link text any more")
+            self.assertEqual(page.locator("button.club-share").get_attribute("aria-label"), "Copy link to this club")
             page.reload()                                         # a reload keeps you in the club
             page.wait_for_selector("#main h2:has-text('Preset Club')")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_share_icon_copies_the_full_link(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1")
+            page.wait_for_selector("button.club-share")
+            page.evaluate("""() => { window.__copied = null;
+              Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async t => { window.__copied = t; } } }); }""")
+            page.click("button.club-share")
+            page.wait_for_selector(".club-share-status:has-text('Link copied')")
+            copied = page.evaluate("window.__copied")
+            self.assertTrue(copied.endswith("dist/index.html#clubs/id1"), copied)
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_share_icon_shows_the_link_when_the_clipboard_is_blocked(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1")
+            page.wait_for_selector("button.club-share")
+            page.evaluate("""() => Object.defineProperty(navigator, 'clipboard', { configurable: true,
+              value: { writeText: async () => { throw new Error('denied'); } } })""")
+            page.click("button.club-share")
+            box = page.locator("input.club-share-url")
+            box.wait_for()
+            self.assertTrue(box.input_value().endswith("#clubs/id1"))
+            self.assertEqual(page.evaluate("document.activeElement.className"), "club-share-url")   # focused and selected
             self.assertEqual(errors, [])
             browser.close()
 

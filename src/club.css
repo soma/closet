@@ -32,3 +32,10 @@
   .club-link { font-family: var(--mono); color: var(--accent-bright); user-select: all; }
   a.ext { color: var(--accent-bright); text-decoration: none; border-bottom: 1px solid var(--accent-deep); }
   a.ext:hover { color: var(--ink); }
+  .club-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .club-share-wrap { display: inline-flex; align-items: center; gap: 10px; }
+  .club-share { background: transparent; color: var(--ink-dim); border: 1px solid var(--rule); border-radius: 2px; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .club-share:hover { color: var(--accent-bright); border-color: var(--accent-deep); }
+  .club-share-status { color: var(--ink-faint); font-family: var(--mono); font-size: 11px; }
+  .club-share-url { min-width: min(70vw, 420px); font-family: var(--mono); font-size: 12px; }
+  header.top { flex-wrap: wrap; }

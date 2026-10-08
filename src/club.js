@@ -120,6 +120,31 @@ function openClub(id) {
   writeHash(); renderView();
 }
 
+/* The page runs inside Pages' frame, so the address to share is the embedding
+ * page's (document.referrer) when the browser gives it to us, else our own. */
+function clubLinkUrl(cid) {
+  return (document.referrer || location.href).split("#")[0] + "#clubs/" + encodeURIComponent(cid);
+}
+const SHARE_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
+function shareEl(cid) {
+  const status = el("span", { class: "club-share-status", role: "status", "aria-live": "polite" });
+  const btn = el("button", { class: "club-share", type: "button", title: "Copy link to this club", "aria-label": "Copy link to this club", html: SHARE_ICON });
+  btn.addEventListener("click", async () => {
+    const url = clubLinkUrl(cid);
+    status.textContent = "";
+    try {
+      await navigator.clipboard.writeText(url);
+      status.textContent = "Link copied";
+    } catch (e) {   // clipboard is not always allowed inside the Pages frame: show the link, selected
+      const box = el("input", { type: "text", readonly: "readonly", value: url, class: "club-share-url", "aria-label": "Link to this club" });
+      status.textContent = "Copy this link: ";
+      status.append(box);
+      box.focus(); box.select();
+    }
+  });
+  return el("span", { class: "club-share-wrap" }, btn, status);
+}
+
 function filmLine(slug, imdbId) {
   const f = DB.filmBy.get(slug);
   if (!f) return el("span", {}, slug);
@@ -181,9 +206,7 @@ function paintClub(body) {
 
   appendAll(body,
     el("button", { class: "btn small ghost", onclick: () => { clubLoadSeq++; CLUB.id = null; CLUB.data = null; CLUB.clubs = null; writeHash(); renderView(); } }, "← All clubs"),
-    el("h2", {}, d.club.data.name),
-    el("p", { class: "club-meta" }, "Link to this club: the page address, with anything after # replaced by ",
-      el("code", { class: "club-link" }, "#clubs/" + encodeURIComponent(cid))),
+    el("div", { class: "club-head" }, el("h2", {}, d.club.data.name), shareEl(cid)),
     clubError(),
     el("h3", {}, "Current"),
     current

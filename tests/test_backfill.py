@@ -64,6 +64,18 @@ class Backfill(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError):
             b.polite_fetch(["a"], always, lambda s: None)
 
+    def test_a_failed_lookup_leaves_the_dataset_file_untouched(self):
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / "closet.json"
+            path.write_bytes((ROOT / "data/closet.json").read_bytes())
+            before = path.read_bytes()
+            with mock.patch.object(merge_data, "DATA", path), \
+                 mock.patch.object(b, "lookup", side_effect=urllib.error.URLError("network down")):
+                self.assertEqual(b.main([]), 2)
+            self.assertEqual(path.read_bytes(), before)
+
     def test_other_http_errors_are_not_retried(self):
         n = []
         def boom(chunk):
