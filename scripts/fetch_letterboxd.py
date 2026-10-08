@@ -137,12 +137,12 @@ def parse_film(slug, title, year, page):
     languages = list(dict.fromkeys(links("language")))     # the page lists the primary language twice
     cast = []
     block = re.search(r'<div class="cast-list text-sluglist">(.*?)</div>', page, re.S)
-    if block:   # the structured data carries no cast on current pages
+    if block:   # the visible cast list is the primary source
         for name in re.findall(r'<a [^>]*href="/actor/[^"]+/"[^>]*>([^<]+)</a>', block.group(1)):
             name = html.unescape(name).strip()
             if name and name not in cast:
                 cast.append(name)
-    cast = cast or names("actors")
+    cast = cast or names("actor") or names("actors")   # structured data: "actor" on current pages
     return {
         "film_slug": slug, "film_title": title, "film_year": year,
         "runtime_min": int(runtime.group(1).replace(",", "")) if runtime else None,

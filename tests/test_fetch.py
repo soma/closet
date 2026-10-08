@@ -199,9 +199,18 @@ class FilmPage(unittest.TestCase):
         self.assertEqual(len(langs), len(set(langs)))
         self.assertEqual(row["primary_language"], langs[0])
 
+    def test_cast_falls_back_to_the_real_structured_data_key(self):
+        import re
+        no_list = re.sub(r'<div class="cast-list text-sluglist">.*?</div>', "", self.page, flags=re.S)
+        self.assertNotIn("cast-list", no_list)
+        cast = f.parse_film("life-of-brian", "Life of Brian", 1979, no_list)["top_cast"].split("; ")
+        self.assertEqual(cast[:3], ["Graham Chapman", "John Cleese", "Terry Gilliam"])
+        self.assertEqual(len(cast), 10)
+
     def test_cast_falls_back_to_structured_data_and_is_blank_without_either(self):
-        ld = '<script type="application/ld+json">{"actors":[{"name":"A One"},{"name":"B Two"}]}</script>'
-        self.assertEqual(f.parse_film("x", "X", 2000, ld)["top_cast"], "A One; B Two")
+        for key in ("actor", "actors"):
+            ld = '<script type="application/ld+json">{"%s":[{"name":"A One"},{"name":"B Two"}]}</script>' % key
+            self.assertEqual(f.parse_film("x", "X", 2000, ld)["top_cast"], "A One; B Two", key)
         self.assertEqual(f.parse_film("x", "X", 2000, "<html></html>")["top_cast"], "")
 
     def test_names_with_entities_are_unescaped(self):
