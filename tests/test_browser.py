@@ -31,6 +31,51 @@ def reference_queue(feed=(), n=8):
     return out
 
 
+def reference_reco(seeds, limit=30, lens="all"):
+    """Independent co-pick ranking: score = sum over visitors of overlap^2 / their closet size."""
+    d = json.loads((ROOT / "data/closet.json").read_text(encoding="utf-8"))
+    pc = d["picks"]["cols"]
+    by_film, by_visit = {}, {}
+    for r in d["picks"]["rows"]:
+        v, order, film = r[pc.index("visit_slug")], r[pc.index("pick_order")], r[pc.index("film_slug")]
+        by_film.setdefault(film, []).append(v)
+        by_visit.setdefault(v, []).append((order, film))
+    for v in by_visit:
+        by_visit[v].sort(key=lambda t: t[0])
+    seeds = list(dict.fromkeys(seeds))
+    overlap = {}
+    for s in seeds:
+        for v in by_film.get(s, []):
+            overlap[v] = overlap.get(v, 0) + 1
+    score, support = {}, {}
+    for v, oc in overlap.items():
+        picks = by_visit[v]
+        w = oc * oc / (len(picks) or 1)
+        for _, film in picks:
+            if film in seeds:
+                continue
+            score[film] = score.get(film, 0) + w
+            support[film] = support.get(film, 0) + 1
+    ranked = sorted(score, key=lambda f: (-score[f], -support[f]))     # stable, like the app
+    return [(f, round(score[f], 9)) for f in ranked[:limit]]
+
+
+def reference_nearest(mine, n=5):
+    d = json.loads((ROOT / "data/closet.json").read_text(encoding="utf-8"))
+    vc, pc = d["visits"]["cols"], d["picks"]["cols"]
+    names = {r[vc.index("visit_slug")]: r[vc.index("visitor")] for r in d["visits"]["rows"]}
+    picks = {}
+    for r in d["picks"]["rows"]:
+        picks.setdefault(r[pc.index("visit_slug")], []).append(r[pc.index("film_slug")])
+    out = []
+    for v, films in picks.items():
+        shared = sum(1 for f in films if f in mine)
+        if shared:
+            out.append((-shared, len(films), names.get(v, ""), v))
+    out.sort()
+    return [(v, -neg, size) for neg, size, _, v in out[:n]]
+
+
 HOST = (ROOT / "tests/host_sim.js").read_text(encoding="utf-8")
 SERVER = (ROOT / "dist/server.js").read_text(encoding="utf-8")
 FAKE_PAGES = HOST + """
@@ -435,7 +480,7 @@ class Smoke(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
             (root / "src").mkdir(); (root / "data").mkdir()
-            for name in ("template.html", "club.js", "club.css", "server.js"):
+            for name in ("template.html", "club.js", "club.css", "closet.js", "closet.css", "server.js"):
                 shutil.copy(ROOT / "src" / name, root / "src" / name)
             shutil.copy(ROOT / "data/closet.json", root / "data/closet.json")
             (root / "data/posters.json").write_text(json.dumps({"cols": 8, "rows": 8, "map": {"12-angry-men": [0, 3, 2], "8-half": [1, 7, 7]}}))
@@ -473,6 +518,149 @@ class Smoke(unittest.TestCase):
                 page.wait_for_function("POSTER_SHEETS[0] && POSTER_SHEETS[0].endsWith('ADs=')")
                 self.assertEqual(errors, [])
                 browser.close()
+
+    def closet_page(self, p, hash_, mine=(), others=None):
+        """The built page with a fake host whose closet_picks already hold `mine` (as u1) and `others` {author: (name, slugs)}."""
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        rows, n = [], 0
+        for slug in mine:
+            n += 1
+            rows.append({"id": f"c{n}", "data": {"film_slug": slug, "by_name": "Ann"}, "author": "u1", "created_at": f"{n:08d}", "updated_at": "1"})
+        for author, (name, slugs) in (others or {}).items():
+            for slug in slugs:
+                n += 1
+                rows.append({"id": f"c{n}", "data": {"film_slug": slug, "by_name": name}, "author": author, "created_at": f"{n:08d}", "updated_at": "1"})
+        page.add_init_script(FAKE_PAGES + f"__host.db.closet_picks = {json.dumps(rows)};")
+        page.goto((ROOT / "dist/index.html").as_uri() + hash_)
+        page.wait_for_function("typeof DB !== 'undefined' && DB !== null")
+        return browser, page, errors
+
+    def test_for_you_matches_an_independent_co_pick_ranking(self):
+        mine = ["12-angry-men", "8-half", "faces-1968"]
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#closet", mine)
+            page.wait_for_selector("#main h3:has-text('For you')")
+            got = page.evaluate(f"computeRecommendations({json.dumps(mine)}, 'all', 24).map(r => [r.slug, Math.round(r.score * 1e9) / 1e9])")
+            self.assertEqual([tuple(g) for g in got], reference_reco(mine, 24))
+            shown = page.evaluate("""() => { const h = [...document.querySelectorAll('#main h3')].find(x => x.textContent === 'For you');
+              return [...h.nextElementSibling.nextElementSibling.querySelectorAll('.poster-card')].map(c => c.dataset.slug); }""")
+            self.assertEqual(shown, [f for f, _ in reference_reco(mine, 24)])
+            self.assertFalse(set(shown) & set(mine), "films already in the closet are never suggested")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_recommend_tab_still_gives_the_same_results_for_fixed_seeds(self):
+        seeds = ["12-angry-men", "8-half"]
+        with sync_playwright() as p:
+            browser, page, errors = self.page_at(p, "#recommend/seeds=" + ",".join(seeds))
+            got = page.evaluate("computeRecommendations().map(r => [r.slug, Math.round(r.score * 1e9) / 1e9])")
+            self.assertEqual([tuple(g) for g in got], reference_reco(seeds, 30))
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_closest_visitors_are_ranked_by_shared_picks_then_smaller_closets(self):
+        mine = ["12-angry-men", "8-half", "faces-1968", "mon-oncle"]
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#closet", mine)
+            page.wait_for_selector("#main h3:has-text('Closest visitors')")
+            got = page.evaluate(f"nearestVisitors(new Set({json.dumps(mine)}), 5).map(n => [n.visit.visit_slug, n.shared, n.size])")
+            self.assertEqual([tuple(g) for g in got], reference_nearest(set(mine), 5))
+            self.assertEqual(page.locator(".closet-near li").count(), 5)
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_other_closets_are_listed_by_overlap_and_open_read_only(self):
+        others = {"u2": ("Bob", ["12-angry-men", "8-half"]), "u3": ("Cleo", ["12-angry-men", "mon-oncle", "faces-1968"]), "u4": ("Dan", ["zorns-lemma"])}
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#closet", ["12-angry-men", "faces-1968"], others)
+            page.wait_for_selector(".closet-others li")
+            names = page.locator(".closet-others li a").all_inner_texts()
+            self.assertEqual(names, ["Cleo", "Bob", "Dan"])           # 2 in common, 1, 0
+            self.assertIn("2 in common with you", page.locator(".closet-others li").first.inner_text())
+            page.click(".closet-others li a >> text=Cleo")
+            page.wait_for_selector("#main h2:has-text(\"Cleo's closet\")")
+            self.assertEqual(page.evaluate("location.hash"), "#closet/u3")
+            self.assertEqual(page.locator(".closet-item").count(), 0, "read-only: no remove buttons")
+            self.assertEqual(page.locator("#main .poster-card").count(), 3)
+            self.assertEqual(page.locator("#main .poster-card:has-text('in your closet too')").count(), 2)
+            self.assertIn("2 in common with you", page.inner_text("#main"))
+            self.assertEqual(page.locator("a.share-link").get_attribute("aria-label"), "Link to this closet")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_a_link_to_someone_elses_closet_and_to_a_missing_one(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#closet/u2", [], {"u2": ("Bob", ["12-angry-men"])})
+            page.wait_for_selector("#main h2:has-text(\"Bob's closet\")")
+            page.reload()
+            page.wait_for_selector("#main h2:has-text(\"Bob's closet\")")
+            page.evaluate("location.hash = '#closet/nobody'")
+            page.wait_for_selector("#main h2:has-text('My closet')")
+            page.wait_for_selector(".club-error:has-text(\"doesn't exist\")")
+            self.assertEqual(page.evaluate("location.hash"), "#closet")
+            page.evaluate("location.hash = '#closet/u1'")             # my own id: just my closet
+            page.wait_for_selector("#main h2:has-text('My closet')")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_adding_and_removing_from_the_film_popup_and_the_closet_view(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#closet", [])
+            page.wait_for_selector("#main h2:has-text('My closet')")
+            self.assertEqual(page.locator("#main h3:has-text('For you')").count(), 0, "nothing to base it on yet")
+            page.evaluate("openFilmModal('12-angry-men')")
+            toggle = page.locator(".film-modal .closet-toggle")
+            toggle.wait_for()
+            page.wait_for_function("document.querySelector('.closet-toggle').textContent.includes('Add to my closet')")
+            toggle.click()
+            page.wait_for_function("document.querySelector('.closet-toggle').textContent.includes('In my closet')")
+            self.assertEqual(page.evaluate("__host.db.closet_picks.map(r => [r.author, r.data.film_slug, r.data.by_name])"), [["u1", "12-angry-men", "Ann"]])
+            page.keyboard.press("Escape")
+            page.wait_for_selector("#main h3:has-text('My picks')")
+            self.assertEqual(page.locator(".closet-item").count(), 1)
+            self.assertTrue(page.locator("#main h3:has-text('For you')").count() == 1)
+            page.click(".closet-item >> text=Remove")
+            page.wait_for_selector("#main h3:has-text('For you')", state="detached")
+            self.assertEqual(page.evaluate("__host.db.closet_picks.length"), 0)
+            # the search box adds too
+            page.fill("input[aria-label='Search films to add to my closet']", "Persona")
+            page.click(".club-list li >> text=Add to my closet >> nth=0")
+            page.wait_for_selector(".closet-item")
+            self.assertEqual(page.evaluate("__host.db.closet_picks.length"), 1)
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_a_slow_older_closets_response_never_overwrites_a_newer_one(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#browse", ["12-angry-men"])
+            got = page.evaluate("""async () => {
+              const orig = window.pages.call;
+              let n = 0;
+              window.pages.call = (a, args) => {
+                if (a !== "closets") return orig(a, args);
+                n += 1;
+                const mine = n;
+                return orig(a, args).then(rows => new Promise(r => setTimeout(() => r(mine === 1 ? [] : rows), mine === 1 ? 300 : 0)));
+              };
+              const slow = loadClosets();      // started first, answers last, with an old (empty) snapshot
+              const fast = loadClosets();
+              await Promise.all([slow, fast]);
+              return [CLOSET.rows.length, await slow, await fast];
+            }""")
+            self.assertEqual(got, [1, False, True])
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_my_closet_without_a_host_explains_itself(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.page(p)
+            page.evaluate("location.hash = '#closet'")
+            page.wait_for_selector("text=Closets keep shared state on the Pages host")
+            self.assertEqual(errors, [])
+            browser.close()
 
     def test_clubs_tab_without_host_explains_itself(self):
         with sync_playwright() as p:

@@ -222,7 +222,7 @@ class Merge(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
             (root / "src").mkdir(); (root / "data").mkdir()
-            for name in ("template.html", "club.js", "club.css", "server.js"):
+            for name in ("template.html", "club.js", "club.css", "closet.js", "closet.css", "server.js"):
                 (root / "src" / name).write_text((ROOT / "src" / name).read_text(encoding="utf-8"), encoding="utf-8")
             (root / "data/closet.json").write_text(merge_data.dump(merged), encoding="utf-8")
             html = build.build(root)

@@ -20,6 +20,8 @@ def build(root=ROOT):
     html = template.replace(PLACEHOLDER, encode(data))
     html = html.replace("/*__CLUB_CSS__*/", (root / "src/club.css").read_text(encoding="utf-8"))
     html = html.replace("/*__CLUB_JS__*/", (root / "src/club.js").read_text(encoding="utf-8"))
+    html = html.replace("/*__CLOSET_CSS__*/", (root / "src/closet.css").read_text(encoding="utf-8"))
+    html = html.replace("/*__CLOSET_JS__*/", (root / "src/closet.js").read_text(encoding="utf-8"))
     cols = data["films"]["cols"]
     imdb = {row[cols.index("film_slug")]: row[cols.index("imdb_id")] or "" for row in data["films"]["rows"]}
     server = (root / "src/server.js").read_text(encoding="utf-8").replace(

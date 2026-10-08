@@ -7,8 +7,8 @@ const { makeHost } = require("./host_sim.js");
 const source = fs.readFileSync(path.join(__dirname, "../src/server.js"), "utf8");
 const SLUGS = { a: "tt0000001", b: "", c: "tt0000003", d: "tt0000004" };
 
-function setup() {
-  const host = makeHost(source, SLUGS);
+function setup(slugs = SLUGS) {
+  const host = makeHost(source, slugs);
   const as = actor => (action, args) => host.call(action, { by_name: actor.toUpperCase(), ...args }, actor);
   return { host, ann: as("ann"), bob: as("bob") };
 }
@@ -197,4 +197,45 @@ test("impossible calendar dates and times are rejected and change nothing", asyn
   // leap day is real in a leap year
   await s.ann("add_entry", { club_id: c, film_slug: "b", watched_on: "2028-02-29" });
   await s.ann("set_time", { club_id: c, entry_id: a.id, scheduled_for: "2028-02-29T23:59" });
+});
+
+test("closet_add stores the caller's pick once, refuses unknown films, and remove undoes only that", async () => {
+  const s = setup();
+  assert.deepEqual(await s.ann("closet_add", { film_slug: "a" }), { added: true, count: 1 });
+  assert.deepEqual(await s.ann("closet_add", { film_slug: "a" }), { added: false, count: 1 });
+  await s.ann("closet_add", { film_slug: "b" });
+  await assert.rejects(s.ann("closet_add", { film_slug: "nope" }), /unknown film/);
+  assert.equal((await s.ann("closet_remove", { film_slug: "a" })).removed, true);
+  assert.equal((await s.ann("closet_remove", { film_slug: "a" })).removed, false);
+  const rows = await s.ann("closets", {});
+  assert.deepEqual(rows.map(r => [r.author, r.film_slug]), [["ann", "b"]]);
+});
+
+test("two people's closets stay separate and closets() returns every row with its author and name", async () => {
+  const s = setup();
+  await s.ann("closet_add", { film_slug: "a" });
+  await s.bob("closet_add", { film_slug: "a" });
+  await s.bob("closet_add", { film_slug: "c" });
+  await s.bob("closet_remove", { film_slug: "a" });                  // removes bob's, not ann's
+  const rows = await s.ann("closets", {});
+  assert.deepEqual(rows.map(r => [r.author, r.film_slug, r.by_name]).sort(), [["ann", "a", "ANN"], ["bob", "c", "BOB"]]);
+  assert.ok(rows.every(r => r.created_at));
+});
+
+test("a forged author argument cannot remove another person's pick", async () => {
+  const s = setup();
+  await s.ann("closet_add", { film_slug: "a" });
+  const out = await s.bob("closet_remove", { film_slug: "a", author: "ann", actor: "ann" });
+  assert.equal(out.removed, false);
+  assert.deepEqual((await s.ann("closets", {})).map(r => r.author), ["ann"]);
+});
+
+test("the 200 cap is counted per caller and cannot be dodged with a forged author", async () => {
+  const many = Object.fromEntries(Array.from({ length: 205 }, (_, i) => [`f${i}`, ""]));
+  const s = setup(many);
+  for (let i = 0; i < 200; i++) await s.bob("closet_add", { film_slug: `f${i}` });
+  await assert.rejects(s.bob("closet_add", { film_slug: "f200" }), /at most 200/);
+  await assert.rejects(s.bob("closet_add", { film_slug: "f200", author: "someone-new" }), /at most 200/);
+  assert.equal((await s.ann("closet_add", { film_slug: "f200" })).added, true, "another person is not affected");
+  assert.equal((await s.bob("closet_add", { film_slug: "f0" })).added, false, "re-adding an owned film is still a no-op at the cap");
 });

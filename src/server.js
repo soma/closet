@@ -4,6 +4,7 @@ const FILM_IMDB = __FILM_IMDB__;
 const FILM_SLUGS = new Set(Object.keys(FILM_IMDB));
 
 const MAX_NOTE = 1000;
+const MAX_CLOSET = 200;      // films one person can have in their closet
 const MAX_NAME = 80;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
@@ -151,6 +152,44 @@ const APP = {
       }
       return { result: { filled: writes.length ? writes.length - 1 : 0 }, writes };
     },
+  },
+
+  // Personal closets. Ownership is decided only by the trusted `actor`: the read step
+  // cannot see it, so each action reads the whole (small) collection and selects the
+  // caller's rows in run(). Nothing in the arguments says whose pick it is.
+  closet_add: {
+    inputs: () => ({ picks: { collection: "closet_picks" } }),
+    run: (args, actor, rows, ids) => {
+      const slug = slugOf(args.film_slug);
+      const mine = rows.picks.filter(r => r.author === actor);
+      if (mine.some(r => r.data.film_slug === slug)) return { result: { added: false, count: mine.length }, writes: [] };
+      if (mine.length >= MAX_CLOSET) fail(`a closet holds at most ${MAX_CLOSET} films`);
+      const id = ids.shift() ?? fail("no id available");
+      return {
+        result: { added: true, count: mine.length + 1 },
+        writes: [{ op: "create", collection: "closet_picks", id, data: { film_slug: slug, by_name: name(args.by_name) } }],
+      };
+    },
+  },
+
+  closet_remove: {
+    inputs: () => ({ picks: { collection: "closet_picks" } }),
+    run: (args, actor, rows) => {
+      const slug = slugOf(args.film_slug);
+      const mine = rows.picks.filter(r => r.author === actor && r.data.film_slug === slug);
+      return {
+        result: { removed: mine.length > 0 },
+        writes: mine.map(r => ({ op: "remove", collection: "closet_picks", id: r.id })),
+      };
+    },
+  },
+
+  closets: {
+    inputs: () => ({ picks: { collection: "closet_picks" } }),
+    run: (args, actor, rows) => ({
+      result: rows.picks.slice().sort(byCreated).map(r => ({
+        author: r.author, by_name: r.data.by_name || "", film_slug: r.data.film_slug, created_at: r.created_at })),
+    }),
   },
 
   // The poster sprite sheets are page assets; the page reads their URLs here.

@@ -87,6 +87,7 @@
   ::selection { background: var(--accent); color: var(--bg); }
 
   /*__CLUB_CSS__*/
+  /*__CLOSET_CSS__*/
 
   /* ---------- layout shell ---------- */
   .shell {
@@ -1141,8 +1142,9 @@ function readHash() {
   const [view, ...rest] = h.split("/");
   // #film/<slug> opens that film's popup over whatever view is current
   if (view === "film") return { view: null, film: decodeURIComponent(rest.join("/")) };
-  const out = { view: ["browse","visitors","recommend","clubs"].includes(view) ? view : "browse" };
+  const out = { view: ["browse","visitors","recommend","closet","clubs"].includes(view) ? view : "browse" };
   if (out.view === "clubs" && rest.length) out.club = decodeURIComponent(rest.join("/"));
+  if (out.view === "closet" && rest.length) out.closetOf = decodeURIComponent(rest.join("/"));
   if (out.view === "recommend" && rest.length) {
     const seedsStr = decodeURIComponent(rest.join("/"));
     if (seedsStr.startsWith("seeds=")) {
@@ -1158,6 +1160,7 @@ function writeHash() {
     h += "/seeds=" + STATE.rc.seeds.join(",");
   }
   if (STATE.view === "clubs" && CLUB.id) h += "/" + encodeURIComponent(CLUB.id);
+  if (STATE.view === "closet" && CLOSET.viewing) h += "/" + encodeURIComponent(CLOSET.viewing);
   history.replaceState(null, "", "#" + h);
 }
 function applyHash() {
@@ -1168,6 +1171,7 @@ function applyHash() {
   if (r.view) {     // a film route leaves the view, and the club selected in it, as they were
     const club = r.view === "clubs" ? (r.club || null) : null;
     if (club !== CLUB.id) { CLUB.id = club; CLUB.data = null; CLUB.error = ""; }
+    CLOSET.viewing = r.view === "closet" ? (r.closetOf || null) : null;
   }
 }
 
@@ -1186,6 +1190,7 @@ function renderShell() {
       tabBtn("browse", "Browse"),
       tabBtn("visitors", "Visitors"),
       tabBtn("recommend", "Recommend"),
+      tabBtn("closet", "My closet"),
       tabBtn("clubs", "Clubs")
     )
   );
@@ -1222,6 +1227,7 @@ function renderView() {
   if (STATE.view === "browse") renderBrowse(main);
   else if (STATE.view === "visitors") renderVisitors(main);
   else if (STATE.view === "recommend") renderRecommend(main);
+  else if (STATE.view === "closet") renderCloset(main);
   else if (STATE.view === "clubs") renderClubs(main);
 }
 
@@ -1553,6 +1559,7 @@ function paintBrowseGrid() {
 function posterCard(film, opts = {}) {
   const card = el("div", {
     class: "poster-card",
+    "data-slug": film.film_slug,
     onclick: opts.onClick || (() => openFilmModal(film.film_slug)),
     title: opts.title || null
   });
@@ -1914,8 +1921,10 @@ function paintSeeds() {
   }
 }
 
-function computeRecommendations() {
-  const seedSet = new Set(STATE.rc.seeds);
+/* Co-pick ranking for a set of seed films. A pure function of its arguments: the
+ * Recommend tab passes its own seeds and lens, "My closet" passes a closet. */
+function computeRecommendations(seeds = STATE.rc.seeds, lens = STATE.rc.occLens, limit = 30) {
+  const seedSet = new Set(seeds);
   if (!seedSet.size) return [];
 
   // Find visitors who picked at least one seed
@@ -1928,8 +1937,7 @@ function computeRecommendations() {
   }
   if (!overlapByVisit.size) return [];
 
-  // Optional occupation filter
-  const lens = STATE.rc.occLens;
+  // Optional occupation filter (the lens argument)
   // For each candidate visitor (with overlap), iterate their picks and score
   const scoreByFilm = new Map();
   const supportByFilm = new Map(); // # of overlapping visitors who picked it
@@ -1976,7 +1984,7 @@ function computeRecommendations() {
     because: becauseByFilm.get(slug) || null,
   }));
   ranked.sort((a,b) => b.score - a.score || b.support - a.support);
-  return ranked.slice(0, 30);
+  return ranked.slice(0, limit);
 }
 
 function paintReco() {
@@ -2090,7 +2098,9 @@ function openFilmModal(slug) {
       f.film_year && f.directors ? "  ·  " : null,
       f.directors ? "dir. " + splitList(f.directors).join(", ") : null
     ),
-    imdbUrl(f.imdb_id) ? el("p", {}, el("a", { class: "ext", href: imdbUrl(f.imdb_id), target: "_blank", rel: "noopener" }, "IMDb ↗")) : null,
+    el("p", { class: "film-actions" },
+      imdbUrl(f.imdb_id) ? el("a", { class: "ext", href: imdbUrl(f.imdb_id), target: "_blank", rel: "noopener" }, "IMDb ↗") : null,
+      closetToggleEl(slug)),
     f.synopsis ? el("p", { class: "synopsis" }, f.synopsis) : null,
     f.genres ? tagRow("Genres", splitList(f.genres)) : null,
     f.themes ? tagRow("Themes", splitList(f.themes)) : null,
@@ -2205,6 +2215,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && $("#modal-mount").firstChild) closeModal();
 });
 
+/*__CLOSET_JS__*/
 /*__CLUB_JS__*/
 
 /* ============== BOOT ============== */

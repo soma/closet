@@ -13,7 +13,7 @@ import argparse, hashlib, json, pathlib, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MARK = ROOT / ".cache/staged.json"
-INPUTS = ["data/closet.json", "data/posters.json", "src/template.html", "src/club.js", "src/club.css", "src/server.js", "scripts/build.py"]
+INPUTS = ["data/closet.json", "data/posters.json", "src/template.html", "src/club.js", "src/club.css", "src/closet.js", "src/closet.css", "src/server.js", "scripts/build.py"]
 
 
 def fingerprint(root=ROOT):

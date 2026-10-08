@@ -1,0 +1,8 @@
+  /* ---------- my closet ---------- */
+  .closet { max-width: 1100px; }
+  .closet h3 { margin: 34px 0 10px; }
+  .closet input[type="search"] { background: var(--bg-elev); color: var(--ink); border: 1px solid var(--rule); padding: 8px 10px; font: inherit; border-radius: 2px; width: min(100%, 420px); }
+  .closet-item { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+  .film-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .closet-near a, .closet-others a { color: var(--accent-bright); text-decoration: none; border-bottom: 1px solid var(--accent-deep); }
+  .closet-near a:hover, .closet-others a:hover { color: var(--ink); }
