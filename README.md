@@ -8,3 +8,5 @@ Criterion Closet picks explorer: one self-contained page, vanilla JS.
 - `scripts/fetch_letterboxd.py` (run it yourself, from your own machine) finds closet visits missing from the dataset and writes `new.json` for the merge. It waits between requests, caches pages in `.cache/` and stops at the first 403/429. Film page parsing is untested against a real page: spot-check the new films.
 - `script/test` runs everything. One-time setup for the browser check:
   `python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/playwright install chromium`
+
+Quick start: `make help`. To refresh the data from your own machine: `make refresh`.
