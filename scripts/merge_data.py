@@ -101,6 +101,16 @@ def merge(existing, incoming, overwrite=False):
         inc = incoming.get(name)
         if inc and set(inc["cols"]) != set(merged[name]["cols"]):
             raise MergeError(f"{name}: columns differ from dataset: {inc['cols']} vs {merged[name]['cols']}")
+    for name in KEYS:
+        inc = incoming.get(name)
+        if not inc:
+            continue
+        seen = set()
+        for row in objects(inc):
+            k = key_of(name, row)
+            if k in seen:
+                raise MergeError(f"incoming {name} has duplicate key {k!r}")
+            seen.add(k)
     existing_visits = {r["visit_slug"] for r in objects(merged["visits"])}
     stats = {}
     for name in ("films", "visits"):

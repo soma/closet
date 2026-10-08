@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
-# Rebuild, then run unit, round-trip and (when playwright is installed) browser checks.
+# Rebuild, then run the unit, round-trip and browser smoke checks.
+# The browser check is required: set up once with
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/playwright install chromium
 set -euo pipefail
 cd "$(dirname "$0")/.."
-python3 scripts/build.py
-python3 -m unittest discover -s tests -v
+PY=python3
+[ -x .venv/bin/python ] && PY=.venv/bin/python
+if ! "$PY" -c "import playwright" 2>/dev/null; then
+  echo "script/test: playwright is not installed, so the browser smoke test cannot run." >&2
+  echo "Set it up with: python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/playwright install chromium" >&2
+  exit 1
+fi
+"$PY" scripts/build.py
+"$PY" -m unittest discover -s tests -v

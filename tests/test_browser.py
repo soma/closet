@@ -1,13 +1,9 @@
 import json, pathlib, unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-try:
-    from playwright.sync_api import sync_playwright
-except ImportError:
-    sync_playwright = None
+from playwright.sync_api import sync_playwright  # required: see README.md
 
 
-@unittest.skipIf(sync_playwright is None, "playwright not installed")
 class Smoke(unittest.TestCase):
     def test_boots_and_renders_all_views(self):
         counts = json.loads((ROOT / "data/closet.json").read_text(encoding="utf-8"))["_meta"]["row_counts"]
@@ -20,10 +16,14 @@ class Smoke(unittest.TestCase):
             page.goto((ROOT / "dist/index.html").as_uri())
             page.wait_for_function("document.querySelector('#app') && document.querySelector('#app').children.length > 0 && !document.querySelector('#app .loading')")
             self.assertTrue(any(f"Loaded {counts['films']} films, {counts['visits']} visits, {counts['picks']} picks" in l for l in logs), logs)
-            for view in ("browse", "visitors", "recommend"):
-                page.goto((ROOT / "dist/index.html").as_uri() + f"#{view}")
-                page.wait_for_timeout(300)
-                self.assertGreater(len(page.inner_text("#app")), 100, view)
+            headings = {
+                "browse": "Every film, every angle",
+                "visitors": "guests, one closet",
+                "recommend": "Tell us a film, we'll tell you a closet",
+            }
+            for view, heading in headings.items():
+                page.evaluate(f"location.hash = '#{view}'")
+                page.wait_for_selector(f"#main h2:has-text(\"{heading}\")", timeout=5000)
             self.assertEqual(errors, [])
             browser.close()
 

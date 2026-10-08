@@ -70,6 +70,50 @@ class Merge(unittest.TestCase):
         with self.assertRaises(merge_data.MergeError):
             merge_data.merge(DATA, inc)
 
+    def test_conflicting_incoming_duplicates_are_rejected_in_both_modes(self):
+        for table, title_col in (("films", "film_title"), ("visits", "visit_title")):
+            inc = incoming()
+            cols = inc[table]["cols"]
+            dup = list(inc[table]["rows"][0])
+            dup[cols.index(title_col)] = "Conflicting"
+            inc[table]["rows"].append(dup)
+            for overwrite in (False, True):
+                with self.assertRaisesRegex(merge_data.MergeError, "duplicate key"):
+                    merge_data.merge(DATA, inc, overwrite)
+
+    def test_overwrite_replaces_a_visit_and_its_picks_whole(self):
+        slug = DATA["visits"]["rows"][0][0]
+        old = len([r for r in DATA["picks"]["rows"] if r[0] == slug])
+        inc = incoming(visit=slug, film="brand-new", n=2)
+        merged, stats = merge_data.merge(DATA, inc, overwrite=True)
+        picks = [r for r in merged["picks"]["rows"] if r[0] == slug]
+        self.assertEqual([r[2] for r in picks], ["brand-new", "brand-new"])
+        self.assertEqual(stats["picks"]["replaced"], 2)
+        self.assertEqual(len(merged["picks"]["rows"]), len(DATA["picks"]["rows"]) - old + 2)
+
+    def test_csv_directory_import(self):
+        import csv
+        inc = incoming()
+        with tempfile.TemporaryDirectory() as d:
+            for name, t in inc.items():
+                with open(pathlib.Path(d) / f"{name}.csv", "w", newline="", encoding="utf-8") as fh:
+                    w = csv.writer(fh)
+                    w.writerow(t["cols"])
+                    w.writerows([["" if v is None else v for v in r] for r in t["rows"]])
+            read = merge_data.read_csv_dir(pathlib.Path(d))
+        merged, stats = merge_data.merge(DATA, read)
+        self.assertEqual((stats["visits"]["added"], stats["films"]["added"], stats["picks"]["added"]), (1, 1, 1))
+
+    def test_main_leaves_canonical_file_untouched_on_invalid_input(self):
+        before = (ROOT / "data/closet.json").read_bytes()
+        inc = incoming(n=2)
+        inc["visits"]["rows"][0][inc["visits"]["cols"].index("num_films")] = 5
+        with tempfile.TemporaryDirectory() as d:
+            f = pathlib.Path(d) / "bad.json"
+            f.write_text(json.dumps(inc))
+            self.assertEqual(merge_data.main([str(f)]), 1)
+        self.assertEqual((ROOT / "data/closet.json").read_bytes(), before)
+
     def test_merge_then_build_keeps_new_rows(self):
         merged, _ = merge_data.merge(DATA, incoming())
         with tempfile.TemporaryDirectory() as d:
