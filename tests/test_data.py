@@ -189,6 +189,26 @@ class Merge(unittest.TestCase):
         self.assertEqual(sum(1 for r in merged["picks"]["rows"] if r[0] == "all-time-top"), 0)
         self.assertEqual(merge_data.validate({k: v for k, v in merged.items() if k != "_meta"}), [])
 
+    def test_canonical_json_with_meta_can_be_merged_again(self):
+        merged, stats = merge_data.merge(DATA, DATA)
+        self.assertEqual({k: merged[k] for k in ("visits", "picks", "films")}, {k: DATA[k] for k in ("visits", "picks", "films")})
+        self.assertEqual((stats["visits"]["added"], stats["films"]["added"], stats["picks"]["added"]), (0, 0, 0))
+
+    def test_an_excluded_list_sharing_a_film_with_an_existing_visit_does_not_swallow_the_films_update(self):
+        fc, vc = DATA["films"]["cols"], DATA["visits"]["cols"]
+        picked = DATA["picks"]["rows"][0][2]                      # a film an existing visit already picks
+        film = next(r for r in DATA["films"]["rows"] if r[0] == picked)
+        fixed = list(film); fixed[fc.index("runtime_min")] = 999
+        meta = {c: "" for c in vc}; meta.update(visit_slug="meta-list", num_films=1)
+        inc = {"films": {"cols": fc, "rows": [fixed]},
+               "visits": {"cols": vc, "rows": [[meta[c] for c in vc]]},
+               "picks": {"cols": DATA["picks"]["cols"], "rows": [["meta-list", 1, picked, "T", 2000]]}}
+        merged, stats = merge_data.merge(DATA, inc, overwrite=True, excluded=["meta-list"])
+        got = next(r for r in merged["films"]["rows"] if r[0] == picked)
+        self.assertEqual(got[fc.index("runtime_min")], 999, "the film-only correction is applied")
+        self.assertEqual(stats["films"]["replaced"], 1)
+        self.assertNotIn("meta-list", [r[0] for r in merged["visits"]["rows"]])
+
     def test_visitor_names_are_cleaned_when_the_title_was_left_in(self):
         c = merge_data.clean_visitor
         self.assertEqual(c("Danny McBride\u2019s Closet Picks"), "Danny McBride")

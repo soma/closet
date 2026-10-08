@@ -105,10 +105,14 @@ def clean_visitor(visitor):
     return m.group(1).strip() if m and m.group(1).strip() else visitor
 
 
-def prepare(incoming, excluded=()):
-    """Drop lists that are not visits (with their picks, and incoming films that
-    nothing else picks) and tidy visitor names. Returns (incoming copy, dropped slugs)."""
-    out = {k: {"cols": list(v["cols"]), "rows": [list(r) for r in v["rows"]]} for k, v in incoming.items()}
+def prepare(incoming, excluded=(), existing_films=()):
+    """Drop lists that are not visits (with their picks) and tidy visitor names.
+    Of the incoming films, only those the exclusion orphaned are dropped: picked
+    by an excluded list, and by no remaining incoming pick and no existing pick
+    (`existing_films`). Every other incoming film, for example a film-only
+    correction, is kept. Only the dataset tables are considered (`_meta` etc. are
+    ignored). Returns (incoming copy, dropped slugs)."""
+    out = {k: {"cols": list(v["cols"]), "rows": [list(r) for r in v["rows"]]} for k, v in incoming.items() if k in KEYS}
     excluded = set(excluded)
     dropped = []
     if "visits" in out:
@@ -126,11 +130,12 @@ def prepare(incoming, excluded=()):
     if dropped and "picks" in out:
         pcols = out["picks"]["cols"]
         pv, pf = pcols.index("visit_slug"), pcols.index("film_slug")
+        gone = {r[pf] for r in out["picks"]["rows"] if r[pv] in excluded}
         out["picks"]["rows"] = [r for r in out["picks"]["rows"] if r[pv] not in excluded]
         if "films" in out:
-            still = {r[pf] for r in out["picks"]["rows"]}
+            orphaned = gone - {r[pf] for r in out["picks"]["rows"]} - set(existing_films)
             fs = out["films"]["cols"].index("film_slug")
-            out["films"]["rows"] = [r for r in out["films"]["rows"] if r[fs] in still]
+            out["films"]["rows"] = [r for r in out["films"]["rows"] if r[fs] not in orphaned]
     return out, dropped
 
 
@@ -141,7 +146,9 @@ def merge(existing, incoming, overwrite=False, excluded=()):
     visit that already exists is skipped whole, or with overwrite has all its
     picks replaced, so a visit never ends up with a mix of old and new picks.
     """
-    incoming, dropped = prepare(incoming, excluded)
+    pcols = existing["picks"]["cols"]
+    in_use = {r[pcols.index("film_slug")] for r in existing["picks"]["rows"]}
+    incoming, dropped = prepare(incoming, excluded, in_use)
     merged = {k: {"cols": list(v["cols"]), "rows": [list(r) for r in v["rows"]]}
               for k, v in existing.items() if k != "_meta"}
     for name in KEYS:
