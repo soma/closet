@@ -35,6 +35,27 @@ class BuiltPage(unittest.TestCase):
             self.assertEqual((ROOT / target).read_text(encoding="utf-8"), html)
 
 
+class PageUrl(unittest.TestCase):
+    def test_pages_url_goes_into_the_pages_upload_only(self):
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"PAGES_URL": "https://pages.example/p/club-x"}):
+            build.build()
+        self.assertIn('const PAGE_URL = "https://pages.example/p/club-x";', (ROOT / "dist/index.html").read_text(encoding="utf-8"))
+        committed = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertIn('const PAGE_URL = "";', committed)
+        self.assertNotIn("pages.example", committed)
+        build.build()   # leave the default build in place
+
+    def test_pages_url_must_be_plain(self):
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"PAGES_URL": 'https://x/"; alert(1); "'}):
+            with self.assertRaises(AssertionError):
+                build.build()
+        build.build()
+
+
 class ImdbData(unittest.TestCase):
     def test_every_imdb_id_is_blank_or_well_formed(self):
         cols = DATA["films"]["cols"]

@@ -120,10 +120,12 @@ function openClub(id) {
   writeHash(); renderView();
 }
 
-/* The page runs inside Pages' frame, so the address to share is the embedding
- * page's (document.referrer) when the browser gives it to us, else our own. */
-function clubLinkUrl(cid) {
-  return (document.referrer || location.href).split("#")[0] + "#clubs/" + encodeURIComponent(cid);
+/* PAGE_URL is the address people open the app at. Inside the Pages frame the
+ * app cannot tell it (document.referrer is unreliable), so the build bakes it
+ * into the Pages upload only; elsewhere it is empty and we use our own. */
+const PAGE_URL = "__PAGE_URL__";
+function clubLinkUrl(cid, pageUrl = PAGE_URL) {
+  return (pageUrl || location.href).split("#")[0] + "#clubs/" + encodeURIComponent(cid);
 }
 const SHARE_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
 function shareEl(cid) {

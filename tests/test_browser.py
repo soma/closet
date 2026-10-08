@@ -257,6 +257,28 @@ class Smoke(unittest.TestCase):
             self.assertEqual(errors, [])
             browser.close()
 
+    def test_club_link_base_is_the_configured_page_url_else_the_apps_own_address(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.page(p)
+            got = page.evaluate("""() => [
+              clubLinkUrl("id 1", "https://pages.example/p/club-x#old"),
+              clubLinkUrl("id1", ""),
+              clubLinkUrl("id1")]""")
+            self.assertEqual(got[0], "https://pages.example/p/club-x#clubs/id%201")
+            self.assertTrue(got[1].endswith("dist/index.html#clubs/id1"))
+            self.assertEqual(got[1], got[2])                      # default build has no PAGE_URL
+            browser.close()
+
+    def test_a_misleading_referrer_is_ignored(self):
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            ctx = browser.new_context(extra_http_headers={"Referer": "https://example.org/somewhere"})
+            page = ctx.new_page()
+            page.goto((ROOT / "dist/index.html").as_uri())
+            page.wait_for_function("typeof DB !== 'undefined' && DB !== null")
+            self.assertNotIn("example.org", page.evaluate("clubLinkUrl('id1')"))
+            browser.close()
+
     def test_share_icon_copies_the_full_link(self):
         with sync_playwright() as p:
             browser, page, errors = self.open_link(p, "#clubs/id1")

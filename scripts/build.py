@@ -2,7 +2,7 @@
 """Build index.html (GitHub Pages) and dist/index.html + dist/server.js (Pages
 upload) from src/template.html, src/club.{js,css}, src/server.js and
 data/closet.json."""
-import base64, gzip, json, pathlib
+import base64, gzip, json, os, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PLACEHOLDER = "__DATA_B64__"
@@ -26,11 +26,15 @@ def build(root=ROOT):
         "__FILM_IMDB__", json.dumps(imdb, ensure_ascii=False, separators=(",", ":")))
     (root / "dist").mkdir(exist_ok=True)
     (root / "dist/server.js").write_text(server, encoding="utf-8")
-    for target in ("index.html", "dist/index.html"):
+    # The Pages share address contains a token, so it goes into the Pages upload
+    # only (from the environment), never into the committed index.html.
+    pages_url = os.environ.get("PAGES_URL", "")
+    assert '"' not in pages_url and "\\" not in pages_url and "<" not in pages_url, "PAGES_URL must be a plain URL"
+    for target, page_url in (("index.html", ""), ("dist/index.html", pages_url)):
         path = root / target
         path.parent.mkdir(exist_ok=True)
-        path.write_text(html, encoding="utf-8")
-    return html
+        path.write_text(html.replace("__PAGE_URL__", page_url), encoding="utf-8")
+    return html.replace("__PAGE_URL__", "")
 
 
 if __name__ == "__main__":
