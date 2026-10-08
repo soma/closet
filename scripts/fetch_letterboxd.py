@@ -4,8 +4,9 @@
     scripts/fetch_letterboxd.py [--out new.json] [--delay 3] [--max-visits N]
 
 Run it yourself, from your own machine. It identifies itself honestly, waits
-between requests, caches every page under .cache/letterboxd/ so a rerun never
-refetches, and stops at the first 403 or 429 instead of retrying. It writes
+between requests, and caches list and film pages under .cache/letterboxd/ so a
+rerun skips them (the lists index is always refetched, and a page that fails
+to parse is dropped from the cache). It stops at the first 403 or 429 instead of retrying. It writes
 columnar JSON for scripts/merge_data.py. Nothing in the dataset is modified.
 
 Parsing of list and index pages is covered by tests against saved pages. Film
