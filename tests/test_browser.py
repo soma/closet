@@ -234,6 +234,16 @@ class Smoke(unittest.TestCase):
             self.assertEqual(sorted(state), sorted([short["film_slug"], long_["film_slug"]]))
             browser.close()
 
+    def page_at(self, p, hash_):
+        """Load the built page straight on a link."""
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto((ROOT / "dist/index.html").as_uri() + hash_)
+        page.wait_for_function("typeof DB !== 'undefined' && DB !== null")
+        return browser, page, errors
+
     def open_link(self, p, hash_, preset=True):
         """Load the page straight on a link, as someone following it would."""
         browser = p.chromium.launch()
@@ -251,7 +261,10 @@ class Smoke(unittest.TestCase):
             page.wait_for_selector("#main h2:has-text('Preset Club')")
             self.assertEqual(page.evaluate("location.hash"), "#clubs/id1")
             self.assertEqual(page.locator(".club-link").count(), 0, "no long link text any more")
-            self.assertEqual(page.locator("button.club-share").get_attribute("aria-label"), "Copy link to this club")
+            link = page.locator("a.share-link")
+            self.assertEqual(link.get_attribute("aria-label"), "Link to this club")
+            self.assertTrue(link.get_attribute("href").endswith("dist/index.html#clubs/id1"), link.get_attribute("href"))
+            self.assertEqual((link.get_attribute("target"), link.get_attribute("rel")), ("_blank", "noopener"))
             page.reload()                                         # a reload keeps you in the club
             page.wait_for_selector("#main h2:has-text('Preset Club')")
             self.assertEqual(errors, [])
@@ -279,30 +292,67 @@ class Smoke(unittest.TestCase):
             self.assertNotIn("example.org", page.evaluate("clubLinkUrl('id1')"))
             browser.close()
 
-    def test_share_icon_copies_the_full_link(self):
+    def test_the_club_link_icon_is_a_real_link_with_the_configured_base(self):
         with sync_playwright() as p:
             browser, page, errors = self.open_link(p, "#clubs/id1")
-            page.wait_for_selector("button.club-share")
-            page.evaluate("""() => { window.__copied = null;
-              Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async t => { window.__copied = t; } } }); }""")
-            page.click("button.club-share")
-            page.wait_for_selector(".club-share-status:has-text('Link copied')")
-            copied = page.evaluate("window.__copied")
-            self.assertTrue(copied.endswith("dist/index.html#clubs/id1"), copied)
+            page.wait_for_selector("a.share-link")
+            self.assertEqual(page.locator("button.club-share").count(), 0, "no copy button, no copy-paste fallback")
+            self.assertEqual(page.locator("input.club-share-url").count(), 0)
+            got = page.evaluate("""() => [pageLink("clubs/x", "https://pages.example/p/c#old"), pageLink("film/a b", ""), pageLink("film/q")]""")
+            self.assertEqual(got[0], "https://pages.example/p/c#clubs/x")
+            self.assertTrue(got[1].endswith("dist/index.html#film/a b"))
+            self.assertEqual(got[1].replace("a b", "q"), got[2])
             self.assertEqual(errors, [])
             browser.close()
 
-    def test_share_icon_shows_the_link_when_the_clipboard_is_blocked(self):
+    def test_link_straight_into_a_film_popup(self):
         with sync_playwright() as p:
-            browser, page, errors = self.open_link(p, "#clubs/id1")
-            page.wait_for_selector("button.club-share")
-            page.evaluate("""() => Object.defineProperty(navigator, 'clipboard', { configurable: true,
-              value: { writeText: async () => { throw new Error('denied'); } } })""")
-            page.click("button.club-share")
-            box = page.locator("input.club-share-url")
-            box.wait_for()
-            self.assertTrue(box.input_value().endswith("#clubs/id1"))
-            self.assertEqual(page.evaluate("document.activeElement.className"), "club-share-url")   # focused and selected
+            browser, page, errors = self.page_at(p, "#film/12-angry-men")
+            page.wait_for_selector(".film-modal h3:has-text('12 Angry Men')")
+            self.assertEqual(page.evaluate("location.hash"), "#film/12-angry-men")
+            link = page.locator(".film-modal a.share-link")
+            self.assertTrue(link.get_attribute("href").endswith("dist/index.html#film/12-angry-men"))
+            self.assertEqual((link.get_attribute("target"), link.get_attribute("rel"), link.get_attribute("aria-label")),
+                             ("_blank", "noopener", "Link to this film"))
+            page.reload()                                           # a reload keeps the popup
+            page.wait_for_selector(".film-modal h3:has-text('12 Angry Men')")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_opening_and_closing_a_film_popup_keeps_the_address_in_step(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.page_at(p, "#visitors")
+            page.wait_for_selector("#main h2:has-text('guests, one closet')")
+            page.evaluate("openFilmModal('12-angry-men')")
+            self.assertEqual(page.evaluate("location.hash"), "#film/12-angry-men")
+            page.keyboard.press("Escape")                           # closing returns to the view we were on
+            self.assertEqual(page.locator(".film-modal").count(), 0)
+            self.assertEqual(page.evaluate("location.hash"), "#visitors")
+            page.evaluate("openFilmModal('12-angry-men')")
+            page.evaluate("openVisitorModal(DB.visits[0].visit_slug)")   # another popup leaves the film address
+            self.assertEqual(page.locator(".film-modal").count(), 0)
+            self.assertEqual(page.evaluate("location.hash"), "#visitors")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_changing_the_address_opens_and_closes_the_film_popup(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.page_at(p, "#browse")
+            page.wait_for_selector("#main h2:has-text('Every film')")
+            page.evaluate("location.hash = '#film/8-half'")
+            page.wait_for_selector(".film-modal h3:has-text('8½')")
+            page.evaluate("location.hash = '#recommend'")
+            page.wait_for_function("document.querySelectorAll('.film-modal').length === 0")
+            self.assertEqual(page.evaluate("STATE.view"), "recommend")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_a_film_link_to_an_unknown_film_falls_back_quietly(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.page_at(p, "#film/no-such-film")
+            page.wait_for_selector("#main h2:has-text('Every film')")
+            self.assertEqual(page.locator(".film-modal").count(), 0)
+            self.assertEqual(page.evaluate("location.hash"), "#browse")
             self.assertEqual(errors, [])
             browser.close()
 

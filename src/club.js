@@ -155,27 +155,21 @@ function openClub(id) {
  * app cannot tell it (document.referrer is unreliable), so the build bakes it
  * into the Pages upload only; elsewhere it is empty and we use our own. */
 const PAGE_URL = "__PAGE_URL__";
+/* A real address for a place in the app: PAGE_URL (or our own address) plus a
+ * fragment. Used as the href of link buttons, so they work like any link. */
+function pageLink(fragment, pageUrl = PAGE_URL) {
+  return (pageUrl || location.href).split("#")[0] + "#" + fragment;
+}
 function clubLinkUrl(cid, pageUrl = PAGE_URL) {
-  return (pageUrl || location.href).split("#")[0] + "#clubs/" + encodeURIComponent(cid);
+  return pageLink("clubs/" + encodeURIComponent(cid), pageUrl);
 }
 const SHARE_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
+/* The link icon: an ordinary anchor, so it can be opened, middle-clicked or copied with the browser's own menu. */
+function shareLinkEl(href, label) {
+  return el("a", { class: "share-link", href, target: "_blank", rel: "noopener", title: label, "aria-label": label, html: SHARE_ICON });
+}
 function shareEl(cid) {
-  const status = el("span", { class: "club-share-status", role: "status", "aria-live": "polite" });
-  const btn = el("button", { class: "club-share", type: "button", title: "Copy link to this club", "aria-label": "Copy link to this club", html: SHARE_ICON });
-  btn.addEventListener("click", async () => {
-    const url = clubLinkUrl(cid);
-    status.textContent = "";
-    try {
-      await navigator.clipboard.writeText(url);
-      status.textContent = "Link copied";
-    } catch (e) {   // clipboard is not always allowed inside the Pages frame: show the link, selected
-      const box = el("input", { type: "text", readonly: "readonly", value: url, class: "club-share-url", "aria-label": "Link to this club" });
-      status.textContent = "Copy this link: ";
-      status.append(box);
-      box.focus(); box.select();
-    }
-  });
-  return el("span", { class: "club-share-wrap" }, btn, status);
+  return shareLinkEl(clubLinkUrl(cid), "Link to this club");
 }
 
 function filmLine(slug, imdbId) {

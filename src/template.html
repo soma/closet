@@ -1026,6 +1026,7 @@ const posterObserver = new IntersectionObserver((entries) => {
 /* --------- global state ---------- */
 let DB = null;     // { films, visits, picks, filmBy, visitBy, picksByVisit, picksByFilm }
 let STATE = {
+  film: null,      // slug of the film popup that is open (#film/<slug>)
   view: "browse",  // browse | visitors | recommend
   // browse filters
   bf: {
@@ -1138,6 +1139,8 @@ function readHash() {
   const h = location.hash.replace(/^#/, "");
   if (!h) return { view: "browse" };
   const [view, ...rest] = h.split("/");
+  // #film/<slug> opens that film's popup over whatever view is current
+  if (view === "film") return { view: null, film: decodeURIComponent(rest.join("/")) };
   const out = { view: ["browse","visitors","recommend","clubs"].includes(view) ? view : "browse" };
   if (out.view === "clubs" && rest.length) out.club = decodeURIComponent(rest.join("/"));
   if (out.view === "recommend" && rest.length) {
@@ -1149,6 +1152,7 @@ function readHash() {
   return out;
 }
 function writeHash() {
+  if (STATE.film) { history.replaceState(null, "", "#film/" + encodeURIComponent(STATE.film)); return; }
   let h = STATE.view;
   if (STATE.view === "recommend" && STATE.rc.seeds.length) {
     h += "/seeds=" + STATE.rc.seeds.join(",");
@@ -1158,7 +1162,8 @@ function writeHash() {
 }
 function applyHash() {
   const r = readHash();
-  STATE.view = r.view;
+  if (r.view) STATE.view = r.view;
+  STATE.film = r.film || null;
   if (r.seeds) STATE.rc.seeds = r.seeds.filter(s => DB.filmBy.has(s));
   const club = r.view === "clubs" ? (r.club || null) : null;
   if (club !== CLUB.id) { CLUB.id = club; CLUB.data = null; CLUB.error = ""; }
@@ -2018,8 +2023,17 @@ function paintReco() {
 function closeModal() {
   $("#modal-mount").innerHTML = "";
   document.body.style.overflow = "";
+  if (STATE.film) { STATE.film = null; writeHash(); }
+}
+/* Open or close the film popup to match the address (#film/<slug>). */
+function syncFilmModal() {
+  if (STATE.film && DB.filmBy.has(STATE.film)) openFilmModal(STATE.film);
+  else if (STATE.film) { STATE.film = null; writeHash(); }   // unknown film: back to the view
+  else if ($("#modal-mount").firstChild) closeModal();
 }
 function showModal(content) {
+  STATE.film = null;      // any other popup leaves the film address
+  writeHash();
   document.body.style.overflow = "hidden";
   const back = el("div", { class: "modal-back", onclick: (e) => { if (e.target === back) closeModal(); } },
     el("div", { class: "modal" },
@@ -2064,7 +2078,7 @@ function openFilmModal(slug) {
   pcol.append(pmeta);
 
   const info = el("div", { class: "info" },
-    el("h3", {}, f.film_title),
+    el("h3", {}, f.film_title, " ", shareLinkEl(pageLink("film/" + encodeURIComponent(slug)), "Link to this film")),
     el("div", { class: "yr-dir" },
       f.film_year ? el("span", { class: "yr" }, String(f.film_year)) : null,
       f.film_year && f.directors ? "  ·  " : null,
@@ -2094,6 +2108,8 @@ function openFilmModal(slug) {
   );
 
   showModal(el("div", { class: "film-modal" }, pcol, info));
+  STATE.film = slug;
+  writeHash();
 }
 function metaRow(k, v) {
   return el("div", { class: "row" },
@@ -2196,7 +2212,8 @@ document.addEventListener("keydown", (e) => {
     console.log(`Loaded ${DB.films.length} films, ${DB.visits.length} visits, ${DB.picks.length} picks in ${(performance.now()-t0).toFixed(0)}ms`);
     applyHash();
     renderShell();
-    window.addEventListener("hashchange", () => { applyHash(); renderShell(); });
+    syncFilmModal();
+    window.addEventListener("hashchange", () => { applyHash(); renderShell(); syncFilmModal(); });
   } catch (err) {
     console.error(err);
     $("#app").innerHTML = `<div class="loading"><div class="reel" style="border-top-color:var(--crimson)"></div><p>Decode failed: ${safeHtml(err.message)}</p></div>`;

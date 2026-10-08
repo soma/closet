@@ -121,11 +121,9 @@
   a.ext { color: var(--accent-bright); text-decoration: none; border-bottom: 1px solid var(--accent-deep); }
   a.ext:hover { color: var(--ink); }
   .club-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .club-share-wrap { display: inline-flex; align-items: center; gap: 10px; }
-  .club-share { background: transparent; color: var(--ink-dim); border: 1px solid var(--rule); border-radius: 2px; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-  .club-share:hover { color: var(--accent-bright); border-color: var(--accent-deep); }
-  .club-share-status { color: var(--ink-faint); font-family: var(--mono); font-size: 11px; }
-  .club-share-url { min-width: min(70vw, 420px); font-family: var(--mono); font-size: 12px; }
+  .share-link { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; color: var(--ink-dim); border: 1px solid var(--rule); border-radius: 2px; text-decoration: none; vertical-align: middle; }
+  .share-link:hover { color: var(--accent-bright); border-color: var(--accent-deep); }
+  .film-modal h3 .share-link { width: 28px; height: 28px; margin-left: 10px; }
   header.top { flex-wrap: wrap; }
   .sprite { position: absolute; inset: 0; background-repeat: no-repeat; }
   .club-thumb, .film-modal .pcol .poster, .visitor-modal .pgrid .pic, .poster-card .poster-wrap { position: relative; }
@@ -1069,6 +1067,7 @@ const posterObserver = new IntersectionObserver((entries) => {
 /* --------- global state ---------- */
 let DB = null;     // { films, visits, picks, filmBy, visitBy, picksByVisit, picksByFilm }
 let STATE = {
+  film: null,      // slug of the film popup that is open (#film/<slug>)
   view: "browse",  // browse | visitors | recommend
   // browse filters
   bf: {
@@ -1181,6 +1180,8 @@ function readHash() {
   const h = location.hash.replace(/^#/, "");
   if (!h) return { view: "browse" };
   const [view, ...rest] = h.split("/");
+  // #film/<slug> opens that film's popup over whatever view is current
+  if (view === "film") return { view: null, film: decodeURIComponent(rest.join("/")) };
   const out = { view: ["browse","visitors","recommend","clubs"].includes(view) ? view : "browse" };
   if (out.view === "clubs" && rest.length) out.club = decodeURIComponent(rest.join("/"));
   if (out.view === "recommend" && rest.length) {
@@ -1192,6 +1193,7 @@ function readHash() {
   return out;
 }
 function writeHash() {
+  if (STATE.film) { history.replaceState(null, "", "#film/" + encodeURIComponent(STATE.film)); return; }
   let h = STATE.view;
   if (STATE.view === "recommend" && STATE.rc.seeds.length) {
     h += "/seeds=" + STATE.rc.seeds.join(",");
@@ -1201,7 +1203,8 @@ function writeHash() {
 }
 function applyHash() {
   const r = readHash();
-  STATE.view = r.view;
+  if (r.view) STATE.view = r.view;
+  STATE.film = r.film || null;
   if (r.seeds) STATE.rc.seeds = r.seeds.filter(s => DB.filmBy.has(s));
   const club = r.view === "clubs" ? (r.club || null) : null;
   if (club !== CLUB.id) { CLUB.id = club; CLUB.data = null; CLUB.error = ""; }
@@ -2061,8 +2064,17 @@ function paintReco() {
 function closeModal() {
   $("#modal-mount").innerHTML = "";
   document.body.style.overflow = "";
+  if (STATE.film) { STATE.film = null; writeHash(); }
+}
+/* Open or close the film popup to match the address (#film/<slug>). */
+function syncFilmModal() {
+  if (STATE.film && DB.filmBy.has(STATE.film)) openFilmModal(STATE.film);
+  else if (STATE.film) { STATE.film = null; writeHash(); }   // unknown film: back to the view
+  else if ($("#modal-mount").firstChild) closeModal();
 }
 function showModal(content) {
+  STATE.film = null;      // any other popup leaves the film address
+  writeHash();
   document.body.style.overflow = "hidden";
   const back = el("div", { class: "modal-back", onclick: (e) => { if (e.target === back) closeModal(); } },
     el("div", { class: "modal" },
@@ -2107,7 +2119,7 @@ function openFilmModal(slug) {
   pcol.append(pmeta);
 
   const info = el("div", { class: "info" },
-    el("h3", {}, f.film_title),
+    el("h3", {}, f.film_title, " ", shareLinkEl(pageLink("film/" + encodeURIComponent(slug)), "Link to this film")),
     el("div", { class: "yr-dir" },
       f.film_year ? el("span", { class: "yr" }, String(f.film_year)) : null,
       f.film_year && f.directors ? "  ·  " : null,
@@ -2137,6 +2149,8 @@ function openFilmModal(slug) {
   );
 
   showModal(el("div", { class: "film-modal" }, pcol, info));
+  STATE.film = slug;
+  writeHash();
 }
 function metaRow(k, v) {
   return el("div", { class: "row" },
@@ -2383,27 +2397,21 @@ function openClub(id) {
  * app cannot tell it (document.referrer is unreliable), so the build bakes it
  * into the Pages upload only; elsewhere it is empty and we use our own. */
 const PAGE_URL = "";
+/* A real address for a place in the app: PAGE_URL (or our own address) plus a
+ * fragment. Used as the href of link buttons, so they work like any link. */
+function pageLink(fragment, pageUrl = PAGE_URL) {
+  return (pageUrl || location.href).split("#")[0] + "#" + fragment;
+}
 function clubLinkUrl(cid, pageUrl = PAGE_URL) {
-  return (pageUrl || location.href).split("#")[0] + "#clubs/" + encodeURIComponent(cid);
+  return pageLink("clubs/" + encodeURIComponent(cid), pageUrl);
 }
 const SHARE_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
+/* The link icon: an ordinary anchor, so it can be opened, middle-clicked or copied with the browser's own menu. */
+function shareLinkEl(href, label) {
+  return el("a", { class: "share-link", href, target: "_blank", rel: "noopener", title: label, "aria-label": label, html: SHARE_ICON });
+}
 function shareEl(cid) {
-  const status = el("span", { class: "club-share-status", role: "status", "aria-live": "polite" });
-  const btn = el("button", { class: "club-share", type: "button", title: "Copy link to this club", "aria-label": "Copy link to this club", html: SHARE_ICON });
-  btn.addEventListener("click", async () => {
-    const url = clubLinkUrl(cid);
-    status.textContent = "";
-    try {
-      await navigator.clipboard.writeText(url);
-      status.textContent = "Link copied";
-    } catch (e) {   // clipboard is not always allowed inside the Pages frame: show the link, selected
-      const box = el("input", { type: "text", readonly: "readonly", value: url, class: "club-share-url", "aria-label": "Link to this club" });
-      status.textContent = "Copy this link: ";
-      status.append(box);
-      box.focus(); box.select();
-    }
-  });
-  return el("span", { class: "club-share-wrap" }, btn, status);
+  return shareLinkEl(clubLinkUrl(cid), "Link to this club");
 }
 
 function filmLine(slug, imdbId) {
@@ -2569,7 +2577,8 @@ function watchedEl(e, act) {
     console.log(`Loaded ${DB.films.length} films, ${DB.visits.length} visits, ${DB.picks.length} picks in ${(performance.now()-t0).toFixed(0)}ms`);
     applyHash();
     renderShell();
-    window.addEventListener("hashchange", () => { applyHash(); renderShell(); });
+    syncFilmModal();
+    window.addEventListener("hashchange", () => { applyHash(); renderShell(); syncFilmModal(); });
   } catch (err) {
     console.error(err);
     $("#app").innerHTML = `<div class="loading"><div class="reel" style="border-top-color:var(--crimson)"></div><p>Decode failed: ${safeHtml(err.message)}</p></div>`;
