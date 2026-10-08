@@ -134,12 +134,20 @@ def parse_film(slug, title, year, page):
     imdb = re.search(r'imdb\.com/title/(tt\d{7,10})', page)
     rating = (ld.get("aggregateRating") or {})
     runtime = re.search(r"([\d,]+)\s*(?:&nbsp;|\s)*mins", page)
-    languages = links("language")
+    languages = list(dict.fromkeys(links("language")))     # the page lists the primary language twice
+    cast = []
+    block = re.search(r'<div class="cast-list text-sluglist">(.*?)</div>', page, re.S)
+    if block:   # the structured data carries no cast on current pages
+        for name in re.findall(r'<a [^>]*href="/actor/[^"]+/"[^>]*>([^<]+)</a>', block.group(1)):
+            name = html.unescape(name).strip()
+            if name and name not in cast:
+                cast.append(name)
+    cast = cast or names("actors")
     return {
         "film_slug": slug, "film_title": title, "film_year": year,
         "runtime_min": int(runtime.group(1).replace(",", "")) if runtime else None,
         "avg_rating": rating.get("ratingValue"), "rating_count": rating.get("ratingCount"),
-        "directors": "; ".join(names("director")), "top_cast": "; ".join(names("actors")[:10]),
+        "directors": "; ".join(names("director")), "top_cast": "; ".join(cast[:10]),
         "genres": "; ".join(ld.get("genre") or []) if isinstance(ld.get("genre"), list) else (ld.get("genre") or ""),
         "themes": "; ".join(links("theme")), "countries": "; ".join(names("countryOfOrigin")),
         "primary_language": languages[0] if languages else "", "spoken_languages": "; ".join(languages),

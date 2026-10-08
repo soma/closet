@@ -174,3 +174,36 @@ class Orchestration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FilmPage(unittest.TestCase):
+    """parse_film against a trimmed real Letterboxd film page (Life of Brian)."""
+    page = (FIX / "film.html").read_text(encoding="utf-8")
+
+    def test_real_page_fields(self):
+        row = f.parse_film("life-of-brian", "Life of Brian", 1979, self.page)
+        self.assertEqual((row["runtime_min"], row["directors"], row["countries"], row["genres"]), (94, "Terry Jones", "UK", "Comedy"))
+        self.assertEqual(row["imdb_id"], "tt0079470")
+        self.assertIn("Faith and religion", row["themes"])
+        self.assertTrue(row["synopsis"].startswith("Brian Cohen is an average young Jewish man"))
+
+    def test_cast_is_the_first_ten_names_in_order_without_extras(self):
+        cast = f.parse_film("life-of-brian", "Life of Brian", 1979, self.page)["top_cast"].split("; ")
+        self.assertEqual(cast[:6], ["Graham Chapman", "John Cleese", "Terry Gilliam", "Eric Idle", "Terry Jones", "Michael Palin"])
+        self.assertEqual(len(cast), 10)
+        self.assertNotIn("Show All", "; ".join(cast))
+
+    def test_spoken_languages_are_not_repeated(self):
+        row = f.parse_film("life-of-brian", "Life of Brian", 1979, self.page)
+        langs = row["spoken_languages"].split("; ")
+        self.assertEqual(len(langs), len(set(langs)))
+        self.assertEqual(row["primary_language"], langs[0])
+
+    def test_cast_falls_back_to_structured_data_and_is_blank_without_either(self):
+        ld = '<script type="application/ld+json">{"actors":[{"name":"A One"},{"name":"B Two"}]}</script>'
+        self.assertEqual(f.parse_film("x", "X", 2000, ld)["top_cast"], "A One; B Two")
+        self.assertEqual(f.parse_film("x", "X", 2000, "<html></html>")["top_cast"], "")
+
+    def test_names_with_entities_are_unescaped(self):
+        page = '<div class="cast-list text-sluglist"><a title="x" href="/actor/a/" class="text-slug">Se&aacute;n O&#039;Neil &amp; Co</a></div>'
+        self.assertEqual(f.parse_film("x", "X", 2000, page)["top_cast"], "Seán O'Neil & Co")
