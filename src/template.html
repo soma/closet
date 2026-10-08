@@ -86,6 +86,8 @@
   }
   ::selection { background: var(--accent); color: var(--bg); }
 
+  /*__CLUB_CSS__*/
+
   /* ---------- layout shell ---------- */
   .shell {
     max-width: 1480px;
@@ -1135,7 +1137,8 @@ function readHash() {
   const h = location.hash.replace(/^#/, "");
   if (!h) return { view: "browse" };
   const [view, ...rest] = h.split("/");
-  const out = { view: ["browse","visitors","recommend"].includes(view) ? view : "browse" };
+  const out = { view: ["browse","visitors","recommend","clubs"].includes(view) ? view : "browse" };
+  if (out.view === "clubs" && rest.length) out.club = decodeURIComponent(rest.join("/"));
   if (out.view === "recommend" && rest.length) {
     const seedsStr = decodeURIComponent(rest.join("/"));
     if (seedsStr.startsWith("seeds=")) {
@@ -1149,12 +1152,15 @@ function writeHash() {
   if (STATE.view === "recommend" && STATE.rc.seeds.length) {
     h += "/seeds=" + STATE.rc.seeds.join(",");
   }
+  if (STATE.view === "clubs" && CLUB.id) h += "/" + encodeURIComponent(CLUB.id);
   history.replaceState(null, "", "#" + h);
 }
 function applyHash() {
   const r = readHash();
   STATE.view = r.view;
   if (r.seeds) STATE.rc.seeds = r.seeds.filter(s => DB.filmBy.has(s));
+  const club = r.view === "clubs" ? (r.club || null) : null;
+  if (club !== CLUB.id) { CLUB.id = club; CLUB.data = null; CLUB.error = ""; }
 }
 
 /* ============== RENDER: SHELL ============== */
@@ -1171,7 +1177,8 @@ function renderShell() {
     el("nav", { class: "tabs" },
       tabBtn("browse", "Browse"),
       tabBtn("visitors", "Visitors"),
-      tabBtn("recommend", "Recommend")
+      tabBtn("recommend", "Recommend"),
+      tabBtn("clubs", "Clubs")
     )
   );
   const main = el("main", { id: "main" });
@@ -1207,6 +1214,7 @@ function renderView() {
   if (STATE.view === "browse") renderBrowse(main);
   else if (STATE.view === "visitors") renderVisitors(main);
   else if (STATE.view === "recommend") renderRecommend(main);
+  else if (STATE.view === "clubs") renderClubs(main);
 }
 
 /* ============== BROWSE ============== */
@@ -2165,6 +2173,8 @@ function openVisitorModal(slug) {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && $("#modal-mount").firstChild) closeModal();
 });
+
+/*__CLUB_JS__*/
 
 /* ============== BOOT ============== */
 (async function() {
