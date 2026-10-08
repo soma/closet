@@ -54,7 +54,8 @@ function otherClosets(people, meId, mine) {
 
 function notifyClosets() {
   refreshClosetToggles();
-  if (STATE.view === "closet") renderView();
+  // the club view shows links to closets, so it repaints when they arrive
+  if (STATE.view === "closet" || (STATE.view === "clubs" && CLUB.id && CLUB.data)) renderView();
 }
 
 /* Only the latest load counts; superseded loads, successes and failures alike, are ignored. */
@@ -74,8 +75,10 @@ async function loadClosets() {
   notifyClosets();
   return ok;
 }
+/* Start a load only if nobody has and the last one did not just fail: a failure waits for an
+ * explicit retry, otherwise every repaint would ask again and hammer a host that is down. */
 function ensureClosets() {
-  if (!CLOSET.rows && !CLOSET.loading) loadClosets();
+  if (!CLOSET.rows && !CLOSET.loading && !CLOSET.loadError) loadClosets();
 }
 
 async function closetAct(action, slug) {

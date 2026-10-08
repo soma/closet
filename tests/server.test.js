@@ -239,3 +239,39 @@ test("the 200 cap is counted per caller and cannot be dodged with a forged autho
   assert.equal((await s.ann("closet_add", { film_slug: "f200" })).added, true, "another person is not affected");
   assert.equal((await s.bob("closet_add", { film_slug: "f0" })).added, false, "re-adding an owned film is still a no-op at the cap");
 });
+
+test("join_club adds the caller once, updates a changed name, and club_state lists participants", async () => {
+  const s = setup(); const c = await club(s);
+  assert.equal((await s.ann("join_club", { club_id: c })).joined, true);
+  assert.equal((await s.ann("join_club", { club_id: c })).joined, false);
+  await s.bob("join_club", { club_id: c, by_name: "Bobby" });
+  const renamed = await s.ann("join_club", { club_id: c, by_name: "Annie" });
+  assert.deepEqual([renamed.joined, renamed.renamed], [false, true]);
+  const st = await state(s, c);
+  assert.deepEqual(st.participants.map(r => [r.author, r.data.by_name]).sort(), [["ann", "Annie"], ["bob", "Bobby"]]);
+  assert.equal(st.log.filter(l => l.data.action === "join_club").length, 2, "logged only when a row was created");
+  await assert.rejects(s.ann("join_club", { club_id: "nope" }), /unknown club/);
+});
+
+test("participants are per club, and leave removes only the caller's row and logs it once", async () => {
+  const s = setup(); const c1 = await club(s);
+  const c2 = (await s.ann("create_club", { name: "Other" })).id;
+  await s.ann("join_club", { club_id: c1 });
+  await s.bob("join_club", { club_id: c1 });
+  await s.ann("join_club", { club_id: c2 });
+  assert.equal((await s.ann("leave_club", { club_id: c1 })).left, true);
+  assert.equal((await s.ann("leave_club", { club_id: c1 })).left, false);
+  assert.deepEqual((await state(s, c1)).participants.map(r => r.author), ["bob"]);
+  assert.deepEqual((await state(s, c2)).participants.map(r => r.author), ["ann"]);
+  assert.equal((await state(s, c1)).log.filter(l => l.data.action === "leave_club").length, 1);
+});
+
+test("a forged author argument cannot make someone else join or leave", async () => {
+  const s = setup(); const c = await club(s);
+  await s.ann("join_club", { club_id: c });
+  await s.bob("join_club", { club_id: c, author: "ann" });
+  assert.deepEqual((await state(s, c)).participants.map(r => r.author).sort(), ["ann", "bob"], "bob joined as bob");
+  const out = await s.bob("leave_club", { club_id: c, author: "ann" });
+  assert.equal(out.left, true);
+  assert.deepEqual((await state(s, c)).participants.map(r => r.author), ["ann"], "only bob's own row went");
+});

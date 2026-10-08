@@ -71,7 +71,9 @@ const fmtWhen = s => s ? s.replace("T", " ") : "";
  * asked for, and it is the latest request for it. */
 let clubLoadSeq = 0;
 async function clubAct(clubId, action, args) {
+  if (CLUB.busy) return;                         // one action at a time
   CLUB.busy = true; CLUB.error = "";
+  if (CLUB.id === clubId && CLUB.data) renderView();   // disable the controls at once
   try {
     await hostCall(action, { club_id: clubId, ...args });
     await loadClub(clubId);
@@ -172,6 +174,49 @@ function shareEl(cid) {
   return shareLinkEl(clubLinkUrl(cid), "Link to this club");
 }
 
+/* Participants: people who joined, plus anyone who rated a film in this club. The name is the
+ * one on the person's most recent row. */
+function clubParticipants(d) {
+  const people = new Map();
+  const note = (row, how) => {
+    let p = people.get(row.author);
+    if (!p) people.set(row.author, p = { author: row.author, name: "", joined: false, rated: false, latest: "" });
+    p[how] = true;
+    const at = String(row.updated_at || row.created_at || "");
+    if (at >= p.latest) { p.latest = at; if (row.data.by_name) p.name = row.data.by_name; }
+  };
+  for (const r of d.participants || []) note(r, "joined");
+  for (const r of d.ratings || []) note(r, "rated");
+  for (const p of people.values()) p.name = p.name || "someone";
+  return [...people.values()].sort((a, b) => a.name.localeCompare(b.name) || a.author.localeCompare(b.author));
+}
+
+function participantsEl(d, cid) {
+  ensureClosets();                               // the closet links need it; the club repaints when it arrives
+  const me = closetMe();
+  const closets = CLOSET.rows ? groupClosets(CLOSET.rows) : null;
+  const people = clubParticipants(d);
+  const mine = people.find(p => p.author === me);
+  const items = people.map(p => {
+    const own = closets && closets.get(p.author);
+    const link = own && own.slugs.size
+      ? el("a", { class: "participant-closet", href: p.author === me ? "#closet" : "#closet/" + encodeURIComponent(p.author) }, `closet (${own.slugs.size})`)
+      : null;
+    const tags = [p.joined ? "joined" : null, p.rated ? "rated" : null].filter(Boolean).join(" · ");
+    return el("li", { "data-author": p.author }, el("span", { class: "participant-name" }, p.name, p.author === me ? " (you)" : ""),
+      el("span", { class: "club-meta" }, " · " + tags), link ? " · " : null, link);
+  });
+  const joined = mine && mine.joined;
+  return el("div", { class: "club-participants" },
+    el("h3", {}, "Participants"),
+    items.length ? el("ul", { class: "club-list participants" }, items)
+                 : el("p", { class: "club-note" }, "Nobody yet."),
+    el("div", { class: "club-actions" },
+      el("button", { class: "btn small" + (joined ? " ghost" : ""), disabled: CLUB.busy,
+        onclick: () => clubAct(cid, joined ? "leave_club" : "join_club", {}) }, joined ? "Leave this club" : "Join this club"),
+      el("span", { class: "club-meta" }, "Rating a watched film adds you as well.")));
+}
+
 function filmLine(slug, imdbId) {
   const f = DB.filmBy.get(slug);
   if (!f) return el("span", {}, slug);
@@ -237,6 +282,7 @@ function paintClub(body) {
     el("button", { class: "btn small ghost", onclick: () => { clubLoadSeq++; CLUB.id = null; CLUB.data = null; CLUB.clubs = null; writeHash(); renderView(); } }, "← All clubs"),
     el("div", { class: "club-head" }, el("h2", {}, d.club.data.name), shareEl(cid)),
     clubError(),
+    participantsEl(d, cid),
     el("h3", {}, "Current"),
     current
       ? el("div", { class: "club-current" }, filmThumb(current.data.film_slug),

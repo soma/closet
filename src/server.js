@@ -89,7 +89,8 @@ const APP = {
   },
 
   club_state: {
-    inputs: args => ({ ...clubAndRatings(args), log: { collection: "log", where: { club_id: clubId(args.club_id) } } }),
+    inputs: args => ({ ...clubAndRatings(args), participants: { collection: "participants", where: { club_id: clubId(args.club_id) } },
+                       log: { collection: "log", where: { club_id: clubId(args.club_id) } } }),
     run: (args, actor, rows) => {
       if (!rows.club || rows.club.length !== 1) fail("unknown club");
       const pick = r => ({ id: r.id, data: r.data, author: r.author, created_at: r.created_at, updated_at: r.updated_at });
@@ -97,6 +98,7 @@ const APP = {
         club: pick(rows.club[0]),
         entries: rows.entries.slice().sort(byCreated).map(pick),
         ratings: rows.ratings.slice().sort(byCreated).map(pick),
+        participants: rows.participants.slice().sort(byCreated).map(pick),
         log: rows.log.slice().sort(byCreated).reverse().slice(0, 100).map(pick),
       } };
     },
@@ -115,6 +117,55 @@ const APP = {
           { op: "create", collection: "log", id: logId, data: { club_id: String(clubIdNew), action: "create_club", film_slug: "", entry_id: "", detail: clubName, by_name: name(args.by_name) } },
         ],
       };
+    },
+  },
+
+  // Participants: people who joined with the button (people who rated a film in the club
+  // count too, but that is derived from the ratings, nothing is written for it). Ownership
+  // comes only from the trusted actor, picked out of the club's rows inside run().
+  join_club: {
+    inputs: args => ({
+      club: { collection: "clubs", where: { id: args.club_id } },
+      participants: { collection: "participants", where: { club_id: clubId(args.club_id) } },
+    }),
+    run: (args, actor, rows, ids) => {
+      if (!rows.club || rows.club.length !== 1) fail("unknown club");
+      const cid = clubId(args.club_id);
+      const by_name = name(args.by_name);
+      const mine = rows.participants.filter(r => r.author === actor);
+      if (mine.length) {
+        const r = mine[0];
+        if (by_name && r.data.by_name !== by_name) {
+          return { result: { joined: false, renamed: true },
+                   writes: [{ op: "update", collection: "participants", id: r.id, data: { ...r.data, by_name } }] };
+        }
+        return { result: { joined: false }, writes: [] };
+      }
+      const id = ids.shift() ?? fail("no id available");
+      const logId = ids.shift() ?? fail("no id available");
+      return {
+        result: { joined: true },
+        writes: [
+          { op: "create", collection: "participants", id, data: { club_id: cid, by_name } },
+          { op: "create", collection: "log", id: logId, data: { club_id: cid, action: "join_club", film_slug: "", entry_id: "", detail: "", by_name } },
+        ],
+      };
+    },
+  },
+
+  leave_club: {
+    inputs: args => ({
+      club: { collection: "clubs", where: { id: args.club_id } },
+      participants: { collection: "participants", where: { club_id: clubId(args.club_id) } },
+    }),
+    run: (args, actor, rows, ids) => {
+      if (!rows.club || rows.club.length !== 1) fail("unknown club");
+      const mine = rows.participants.filter(r => r.author === actor);
+      if (!mine.length) return { result: { left: false }, writes: [] };
+      const writes = mine.map(r => ({ op: "remove", collection: "participants", id: r.id }));
+      writes.push({ op: "create", collection: "log", id: ids.shift() ?? fail("no id available"),
+        data: { club_id: clubId(args.club_id), action: "leave_club", film_slug: "", entry_id: "", detail: "", by_name: name(args.by_name) } });
+      return { result: { left: true }, writes };
     },
   },
 

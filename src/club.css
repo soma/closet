@@ -39,3 +39,7 @@
   header.top { flex-wrap: wrap; }
   .sprite { position: absolute; inset: 0; background-repeat: no-repeat; }
   .club-thumb, .film-modal .pcol .poster, .visitor-modal .pgrid .pic, .poster-card .poster-wrap { position: relative; }
+  .club-participants { margin-top: 18px; }
+  .participants li { padding: 8px 0 !important; align-items: baseline; }
+  .participant-name { font-family: var(--serif-display); font-size: 1.1rem; }
+  .participant-closet { color: var(--accent-bright); text-decoration: none; border-bottom: 1px solid var(--accent-deep); }

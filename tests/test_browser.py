@@ -289,14 +289,14 @@ class Smoke(unittest.TestCase):
         page.wait_for_function("typeof DB !== 'undefined' && DB !== null")
         return browser, page, errors
 
-    def open_link(self, p, hash_, preset=True):
+    def open_link(self, p, hash_, preset=True, init_extra=""):
         """Load the page straight on a link, as someone following it would."""
         browser = p.chromium.launch()
         page = browser.new_page()
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        pre = 'window.pages.call("create_club", { name: "Preset Club" });' if preset else ""
-        page.add_init_script(FAKE_PAGES + pre)
+        pre = '__host.call("create_club", { name: "Preset Club" }, "u1");' if preset else ""   # direct: the page wrapper delays calls
+        page.add_init_script(FAKE_PAGES + pre + init_extra)
         page.goto((ROOT / "dist/index.html").as_uri() + hash_)
         return browser, page, errors
 
@@ -753,6 +753,120 @@ class Smoke(unittest.TestCase):
             page.wait_for_selector(".club-error:has-text('closets unavailable')")
             page.click("button:has-text('Retry')")
             page.wait_for_selector("#main h3:has-text('My picks')")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    # other people acting in club id1 before the page opens: u2 "Bob" (joined, has a 2-film closet), u3 "Cleo" (joined, no closet)
+    PEOPLE = """
+    (async () => {
+      const h = __host;
+      await h.call("join_club", { club_id: "id1", by_name: "Bob" }, "u2");
+      await h.call("closet_add", { film_slug: "12-angry-men", by_name: "Bob" }, "u2");
+      await h.call("closet_add", { film_slug: "8-half", by_name: "Bob" }, "u2");
+      await h.call("join_club", { club_id: "id1", by_name: "Cleo" }, "u3");
+    })();"""
+
+    def test_joining_and_leaving_lists_the_viewer_as_a_participant(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1")
+            page.wait_for_selector("h3:has-text('Participants')")
+            self.assertIn("Nobody yet", page.inner_text(".club-participants"))
+            page.click("button:has-text('Join this club')")
+            page.wait_for_selector(".participants li:has-text('Ann (you)')")
+            self.assertIn("joined", page.inner_text(".participants li"))
+            self.assertEqual(page.evaluate("__host.db.participants.map(r => [r.author, r.data.by_name, r.data.club_id])"), [["u1", "Ann", "id1"]])
+            self.assertIn("join club", page.inner_text(".club-log"))
+            page.click("button:has-text('Leave this club')")
+            page.wait_for_selector("text=Nobody yet")
+            self.assertEqual(page.evaluate("__host.db.participants.length"), 0)
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_rating_a_film_makes_you_a_participant_and_joining_too_gives_one_entry(self):
+        script = """(async () => { const h = __host;
+          const e = await h.call("add_entry", { club_id: "id1", film_slug: "12-angry-men", watched_on: "2026-01-01" }, "u1");
+          await h.call("rate", { club_id: "id1", entry_id: e.id, score: 8, by_name: "Ann" }, "u1"); })();"""
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1", init_extra=script)
+            page.wait_for_selector(".participants li:has-text('Ann (you)')")
+            self.assertIn("rated", page.inner_text(".participants li"))
+            self.assertNotIn("joined", page.inner_text(".participants li"))
+            self.assertEqual(page.evaluate("__host.db.participants || []").__len__(), 0, "rating wrote no participant row")
+            page.click("button:has-text('Join this club')")
+            page.wait_for_function("document.querySelector('.participants li').textContent.includes('joined')")
+            self.assertEqual(page.locator(".participants li").count(), 1)
+            self.assertIn("joined · rated", page.inner_text(".participants li"))
+            page.click("button:has-text('Leave this club')")
+            page.wait_for_function("!document.querySelector('.participants li').textContent.includes('joined')")
+            self.assertIn("rated", page.inner_text(".participants li"), "the rating still counts")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_a_closet_link_appears_only_for_people_with_a_closet(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1", init_extra=self.PEOPLE)
+            page.wait_for_selector(".participants li:has-text('Bob')")
+            page.wait_for_selector(".participants li:has-text('Bob') a.participant-closet")
+            bob = page.locator(".participants li:has-text('Bob')")
+            self.assertEqual(bob.locator("a").get_attribute("href"), "#closet/u2")
+            self.assertEqual(bob.locator("a").inner_text(), "closet (2)")
+            self.assertEqual(page.locator(".participants li:has-text('Cleo') a").count(), 0, "no closet, no link")
+            self.assertEqual(page.locator(".club-error").count(), 0)
+            bob.locator("a").click()
+            page.wait_for_selector("#main h2:has-text(\"Bob's closet\")")
+            self.assertEqual(page.evaluate("location.hash"), "#closet/u2")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_my_own_closet_link_goes_to_my_closet(self):
+        mine = """(async () => { await __host.call("join_club", { club_id: "id1", by_name: "Ann" }, "u1");
+                                 await __host.call("closet_add", { film_slug: "faces-1968", by_name: "Ann" }, "u1"); })();"""
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1", init_extra=mine)
+            page.wait_for_selector(".participants li:has-text('Ann (you)') a.participant-closet")
+            self.assertEqual(page.locator(".participants li a").get_attribute("href"), "#closet")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_if_closets_cannot_load_the_list_shows_without_links_and_without_an_error(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1", init_extra=self.SLOW + self.PEOPLE + "window.__fail.closets = 5; window.__failMsg = 'closets unavailable';")
+            page.wait_for_selector(".participants li:has-text('Bob')")
+            page.wait_for_function("window.__calls && window.__calls.closets >= 1")
+            page.wait_for_timeout(300)
+            self.assertEqual(page.locator(".participants li:has-text('Cleo')").count(), 1)
+            self.assertEqual(page.locator("a.participant-closet").count(), 0)
+            self.assertEqual(page.locator(".club-error").count(), 0, "a closet problem is not a club error")
+            page.evaluate("renderView()")                       # repainting must not ask the failing host again
+            page.wait_for_timeout(300)
+            self.assertEqual(page.evaluate("window.__calls.closets"), 1, "no retry storm after a failed load")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_a_slow_join_disables_the_button_and_ignores_a_second_click(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1", init_extra=self.SLOW)
+            page.wait_for_selector("button:has-text('Join this club')")
+            page.evaluate("window.__delay.join_club = 500")
+            page.click("button:has-text('Join this club')")
+            self.assertTrue(page.locator(".club-participants button").is_disabled(), "disabled at once")
+            page.evaluate("document.querySelector('.club-participants button').click()")
+            page.wait_for_selector(".participants li:has-text('Ann (you)')", timeout=5000)
+            self.assertEqual(page.evaluate("window.__calls.join_club"), 1)
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_the_most_recent_name_wins(self):
+        script = """(async () => { const h = __host;
+          await h.call("join_club", { club_id: "id1", by_name: "Bob" }, "u2");
+          const e = await h.call("add_entry", { club_id: "id1", film_slug: "12-angry-men", watched_on: "2026-01-01" }, "u2");
+          await h.call("rate", { club_id: "id1", entry_id: e.id, score: 7, by_name: "Robert" }, "u2"); })();"""
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1", init_extra=script)
+            page.wait_for_selector(".participants li")
+            self.assertEqual(page.locator(".participants li").count(), 1)
+            self.assertIn("Robert", page.inner_text(".participants li"))
+            self.assertNotIn("Bob", page.inner_text(".participants li"))
             self.assertEqual(errors, [])
             browser.close()
 
