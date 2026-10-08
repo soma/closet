@@ -11,6 +11,12 @@ async function loadPosterSheets() {
     for (const r of rows) if (r.asset_url && Number.isInteger(r.sheet)) POSTER_SHEETS[r.sheet] = r.asset_url;
   } catch (e) { /* no sprites: posters fall back to their own links */ }
 }
+/* The sheet addresses are signed and valid for an hour, so a tab left open
+ * asks for fresh ones; renders after that use the new addresses. */
+const POSTER_REFRESH_MS = 30 * 60 * 1000;
+function startPosterRefresh() {
+  if (POSTER_MAP && window.pages && window.pages.call) setInterval(loadPosterSheets, POSTER_REFRESH_MS);
+}
 function spriteEl(slug) {
   const at = POSTER_MAP && POSTER_MAP.map[slug];
   const url = at && POSTER_SHEETS[at[0]];

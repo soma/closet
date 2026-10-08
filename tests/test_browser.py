@@ -387,6 +387,13 @@ class Smoke(unittest.TestCase):
                 self.assertAlmostEqual(x, 3 / 7 * 100, places=2)
                 self.assertAlmostEqual(y, 2 / 7 * 100, places=2)
                 self.assertTrue(got["sheetMissing"] and got["unmapped"])
+                # the signed addresses expire after an hour: the app asks again every 30 minutes
+                page.clock.install()
+                page.reload()
+                page.wait_for_function("typeof DB !== 'undefined' && DB !== null")
+                page.evaluate("__host.db.poster_sheets[0].asset_url = 'data:image/gif;base64,R0lGODlhAQABAAAAADs='")
+                page.clock.fast_forward("31:00")
+                page.wait_for_function("POSTER_SHEETS[0] && POSTER_SHEETS[0].endsWith('ADs=')")
                 self.assertEqual(errors, [])
                 browser.close()
 

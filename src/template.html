@@ -2192,6 +2192,7 @@ document.addEventListener("keydown", (e) => {
     const raw = await decode(DATA_B64);
     DB = build(raw);
     await loadPosterSheets();
+    startPosterRefresh();
     console.log(`Loaded ${DB.films.length} films, ${DB.visits.length} visits, ${DB.picks.length} picks in ${(performance.now()-t0).toFixed(0)}ms`);
     applyHash();
     renderShell();
