@@ -64,13 +64,14 @@ def backfill(data, found, overwrite=False):
     si, ii = cols.index("film_slug"), cols.index("imdb_id")
     stats = {"filled": 0, "already_set": 0, "conflicting": [], "missing": 0}
     for row in out["films"]["rows"]:
+        if row[ii] and not overwrite:          # an incremental run never asked about these
+            stats["already_set"] += 1
+            continue
         ids = found.get(row[si], set())
         if len(ids) > 1:
             stats["conflicting"].append(row[si])
         elif not ids:
             stats["missing"] += 1
-        elif row[ii] and not overwrite:
-            stats["already_set"] += 1
         else:
             row[ii] = next(iter(ids))
             stats["filled"] += 1

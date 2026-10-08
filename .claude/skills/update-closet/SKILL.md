@@ -24,9 +24,14 @@ Page id **266**, repo `~/projects/barsoom/lab/closet`. Film data lives inside `i
 - Run `script/test` before committing. Follow CLAUDE.md: small commits, no agent mentions in commit messages.
 
 ## Steps
-1. **Check the data is updated.** `make summary`. If `new visits` and `new films` are 0 and
-   nothing is listed to upload, tell the user there is nothing to do. If the data was not refreshed
-   yet, ask them to run `make update` on their machine (do not attempt the fetch).
+1. **Decide what is left to do.** `make summary` and `python3 scripts/stage_status.py`. Counts alone
+   are not enough: an update can be only IMDb ids or corrected fields on existing films, and an
+   earlier run may have committed the data but failed while staging. There is nothing to do only when
+   **all** hold: no uncommitted changes to `data/closet.json`, `data/posters.json` or `index.html`,
+   no sheets to upload, and `stage_status.py` says "staged and current". Otherwise continue; steps
+   already done are skipped (nothing to commit in step 4, no sheets in step 6) and a failed run
+   resumes at the first unfinished step. If the data was not refreshed yet, ask the user to run
+   `make update` on their machine (do not attempt the fetch).
 2. **Spot-check the new films.** The summary lists new films missing `imdb_id`, `runtime_min`,
    `avg_rating`, `directors` or `poster_url`. Film page parsing was written without a saved page, so
    gaps are expected at first; report them. A new film with no directors or runtime can never be
@@ -46,6 +51,7 @@ Page id **266**, repo `~/projects/barsoom/lab/closet`. Film data lives inside `i
    - If "Uploaded files are not switched on", stop and ask the user to have an administrator switch it on.
 7. **Stage the build**: `begin_upload(266, [index.html, server.js])`, PUT `dist/index.html` and
    `dist/server.js` (`Content-Type: text/html` and `application/javascript`), then `finalize_upload`.
+   Only after it succeeds: `python3 scripts/stage_status.py --mark-staged`.
 8. **Verify on the real host** with `run_page_action` (nothing is kept): `poster_sheets` returns every
    sheet with an `asset_url`; `list_clubs` works; `fill_imdb` reports 0 or only entries that still lack an id.
    Check `read_page_events` for new errors.

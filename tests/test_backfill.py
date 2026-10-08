@@ -76,6 +76,13 @@ class Backfill(unittest.TestCase):
                 self.assertEqual(b.main([]), 2)
             self.assertEqual(path.read_bytes(), before)
 
+    def test_incremental_statistics_count_existing_ids_as_kept_not_missing(self):
+        d, slugs, ii = small()
+        for r in d["films"]["rows"][:-1]:
+            r[ii] = "tt1234567"
+        out, stats = b.backfill(d, {slugs[-1]: {"tt7654321"}})      # lookup asked only about the last film
+        self.assertEqual((stats["filled"], stats["already_set"], stats["missing"], stats["conflicting"]), (1, len(slugs) - 1, 0, []))
+
     def test_only_films_without_an_id_are_looked_up(self):
         import tempfile
         from unittest import mock

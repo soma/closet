@@ -53,3 +53,74 @@ class Summary(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StageStatus(unittest.TestCase):
+    def setUp(self):
+        import stage_status
+        self.ss = stage_status
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = pathlib.Path(self.tmp.name)
+        for name in self.ss.INPUTS:
+            (self.root / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / name).write_text(name)
+        self.mark = self.root / "staged.json"
+
+    def stage(self):
+        self.mark.write_text(json.dumps({"fingerprint": self.ss.fingerprint(self.root)}))
+
+    def test_needs_staging_until_marked_then_again_after_any_input_change(self):
+        self.assertTrue(self.ss.needs_staging(self.root, self.mark))
+        self.stage()
+        self.assertFalse(self.ss.needs_staging(self.root, self.mark))
+        (self.root / "src/club.js").write_text("changed")
+        self.assertTrue(self.ss.needs_staging(self.root, self.mark))
+
+    def test_an_imdb_only_data_change_with_identical_counts_needs_staging(self):
+        data = dataset(["v1"], [("f1", "", 90, 4.0, "A", "u")], [("v1", "f1")])
+        (self.root / "data/closet.json").write_text(json.dumps(data))
+        self.stage()
+        data["films"]["rows"][0][1] = "tt0000001"                 # same visits, films and picks
+        (self.root / "data/closet.json").write_text(json.dumps(data))
+        s = us.summarize(json.loads(json.dumps(dataset(["v1"], [("f1", "", 90, 4.0, "A", "u")], [("v1", "f1")]))), data)
+        self.assertEqual((s["new_visits"], s["new_films"], s["new_picks"]), (0, 0, 0))
+        self.assertTrue(self.ss.needs_staging(self.root, self.mark), "counts say nothing changed, the fingerprint does")
+
+    def test_a_failed_staging_is_retried_because_the_mark_is_only_written_after_success(self):
+        (self.root / "data/closet.json").write_text("committed new data")
+        # data committed and sheets marked uploaded, but staging failed: --mark-staged was never run
+        self.assertTrue(self.ss.needs_staging(self.root, self.mark))
+
+
+class MakeUpdateOrder(unittest.TestCase):
+    """The real `update` rule, with the stage recipes replaced by stubs, run in parallel mode."""
+    def makefile(self, failing=None):
+        import re
+        real = (ROOT / "Makefile").read_text(encoding="utf-8")
+        rule = re.search(r"^update:\n(?:\t.*\n)+", real, re.M).group(0)
+        stages = ["fetch", "merge", "backfill-imdb", "posters", "build", "test", "summary"]
+        stubs = "".join(f"{s}:\n\t@{'false' if s == failing else 'true'}; echo {s}\n" for s in stages)
+        # a stub that fails must stop the run before it echoes anything for later stages
+        stubs = stubs.replace(f"@false; echo {failing}", f"@echo {failing}; false") if failing else stubs
+        notpar = ".NOTPARALLEL:\n" if ".NOTPARALLEL:" in real else ""
+        return notpar + ".PHONY: update " + " ".join(stages) + "\n" + rule + stubs
+
+    def run_make(self, text, *flags):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / "Makefile").write_text(text)
+            return subprocess.run(["make", *flags, "update"], cwd=d, capture_output=True, text=True)
+
+    def test_stages_run_in_order_even_with_parallel_flags(self):
+        out = self.run_make(self.makefile(), "-j8")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        stages = [l for l in out.stdout.split("\n") if l in ("fetch", "merge", "backfill-imdb", "posters", "build", "test", "summary")]
+        self.assertEqual(stages, ["fetch", "merge", "backfill-imdb", "posters", "build", "test", "summary"])
+
+    def test_a_failing_stage_stops_everything_after_it(self):
+        out = self.run_make(self.makefile(failing="merge"), "-j8")
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("fetch", out.stdout)
+        for later in ("backfill-imdb", "posters", "build", "summary"):
+            self.assertNotIn(later, out.stdout.split("\n"))

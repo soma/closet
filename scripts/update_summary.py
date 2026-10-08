@@ -7,7 +7,7 @@ import json, pathlib, subprocess, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
-import poster_status  # noqa: E402
+import poster_status, stage_status  # noqa: E402
 
 
 def keys(data, table, col):
@@ -43,6 +43,7 @@ def main():
             print(f"  new films missing {field}: {len(slugs)} e.g. {', '.join(slugs[:5])}")
     names = poster_status.changed() if (poster_status.CACHE / "sheets.json").exists() else []
     print("poster sheets to upload: " + (", ".join(names) if names else "none"))
+    print("Pages app: " + ("needs staging" if stage_status.needs_staging() else "staged and current"))
     print("next: ask Claude to run the update-closet skill to stage and upload (nothing is pushed or published)")
 
 

@@ -1,6 +1,9 @@
 DELAY ?= 3
 
-.PHONY: help setup fetch merge build backfill-imdb posters poster-status summary update refresh test
+# The update stages read and rewrite the same files: never run them in parallel.
+.NOTPARALLEL:
+
+.PHONY: help setup fetch merge build backfill-imdb posters poster-status stage-status summary update refresh test
 
 help:
 	@echo "make setup    one-time: venv, playwright, chromium (only needed for tests)"
@@ -38,10 +41,20 @@ backfill-imdb:
 poster-status:
 	python3 scripts/poster_status.py
 
+stage-status:
+	python3 scripts/stage_status.py
+
 summary:
 	python3 scripts/update_summary.py
 
-update: fetch merge backfill-imdb posters build test summary
+update:
+	$(MAKE) fetch
+	$(MAKE) merge
+	$(MAKE) backfill-imdb
+	$(MAKE) posters
+	$(MAKE) build
+	$(MAKE) test
+	$(MAKE) summary
 
 refresh: fetch merge build test
 
