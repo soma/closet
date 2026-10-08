@@ -519,7 +519,7 @@ class Smoke(unittest.TestCase):
                 self.assertEqual(errors, [])
                 browser.close()
 
-    def closet_page(self, p, hash_, mine=(), others=None):
+    def closet_page(self, p, hash_, mine=(), others=None, init_extra=""):
         """The built page with a fake host whose closet_picks already hold `mine` (as u1) and `others` {author: (name, slugs)}."""
         browser = p.chromium.launch()
         page = browser.new_page()
@@ -533,7 +533,7 @@ class Smoke(unittest.TestCase):
             for slug in slugs:
                 n += 1
                 rows.append({"id": f"c{n}", "data": {"film_slug": slug, "by_name": name}, "author": author, "created_at": f"{n:08d}", "updated_at": "1"})
-        page.add_init_script(FAKE_PAGES + f"__host.db.closet_picks = {json.dumps(rows)};")
+        page.add_init_script(FAKE_PAGES + f"__host.db.closet_picks = {json.dumps(rows)};" + init_extra)
         page.goto((ROOT / "dist/index.html").as_uri() + hash_)
         page.wait_for_function("typeof DB !== 'undefined' && DB !== null")
         return browser, page, errors
@@ -651,6 +651,108 @@ class Smoke(unittest.TestCase):
               return [CLOSET.rows.length, await slow, await fast];
             }""")
             self.assertEqual(got, [1, False, True])
+            self.assertEqual(errors, [])
+            browser.close()
+
+    # a wrapper around the fake host: delay or fail chosen actions, and count the calls
+    SLOW = """
+    window.__calls = {}; window.__delay = {}; window.__fail = {};
+    (function () {
+      const orig = window.pages.call;
+      window.pages.call = (a, args) => {
+        window.__calls[a] = (window.__calls[a] || 0) + 1;
+        if (window.__fail[a] > 0) { window.__fail[a]--; return new Promise((_, no) => setTimeout(() => no(new Error(window.__failMsg || "boom")), window.__delay[a] || 0)); }
+        return new Promise(r => setTimeout(r, window.__delay[a] || 0)).then(() => orig(a, args));
+      };
+    })();"""
+
+    def test_equal_overlap_closets_are_ordered_by_name_not_size(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.page(p)
+            got = page.evaluate("""() => {
+              const rows = [["u2", "Zoe", "12-angry-men"], ["u2", "Zoe", "zorns-lemma"], ["u3", "Amy", "12-angry-men"], ["u4", "Max", "8-half"]]
+                .map(([author, by_name, film_slug], i) => ({ author, by_name, film_slug, created_at: String(i).padStart(4, "0") }));
+              return otherClosets(groupClosets(rows), "u1", new Set(["12-angry-men"])).map(o => [o.person.name, o.shared]);
+            }""")
+            self.assertEqual(got, [["Amy", 1], ["Zoe", 1], ["Max", 0]])      # same overlap: name decides, not the bigger closet
+            browser.close()
+
+    def test_a_load_that_finishes_after_the_view_and_popup_both_asked_repaints_both(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#browse", ["12-angry-men"], init_extra=self.SLOW)
+            page.evaluate("window.__delay.closets = 500")
+            page.evaluate("location.hash = '#closet'")                     # the view starts the load
+            page.wait_for_selector("text=Loading closets")
+            page.evaluate("location.hash = '#film/12-angry-men'")          # the popup asks while it is in flight
+            page.wait_for_function("document.querySelector('.closet-toggle').textContent.includes('In my closet')", timeout=5000)
+            page.keyboard.press("Escape")
+            page.wait_for_selector("#main h3:has-text('My picks')")        # the waiting view was repainted too
+            self.assertEqual(page.evaluate("window.__calls.closets"), 1, "one shared load, not one per consumer")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_a_pending_action_disables_the_controls_at_once_and_ignores_a_second_click(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#browse", [], init_extra=self.SLOW)
+            page.evaluate("openFilmModal('12-angry-men')")
+            page.wait_for_function("document.querySelector('.closet-toggle').textContent.includes('Add to my closet')")
+            page.evaluate("window.__delay.closet_add = 500")
+            page.click(".closet-toggle")
+            self.assertTrue(page.locator(".closet-toggle").is_disabled(), "disabled immediately, not when the action ends")
+            page.evaluate("document.querySelector('.closet-toggle').click()")   # a second click while pending
+            page.wait_for_function("document.querySelector('.closet-toggle').textContent.includes('In my closet')", timeout=5000)
+            self.assertEqual(page.evaluate("window.__calls.closet_add"), 1)
+            self.assertFalse(page.locator(".closet-toggle").is_disabled())
+            self.assertEqual(page.evaluate("CLOSET.busy"), False)
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_every_closet_control_is_disabled_while_an_action_runs(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#closet", ["12-angry-men", "8-half"], init_extra=self.SLOW)
+            page.wait_for_selector(".closet-item")
+            page.evaluate("window.__delay.closet_remove = 500")
+            page.locator(".closet-item >> text=Remove").first.click()
+            page.wait_for_function("[...document.querySelectorAll('.closet-item button')].every(b => b.disabled)")
+            page.evaluate("document.querySelectorAll('.closet-item button')[1].click()")   # another Remove while pending
+            page.wait_for_function("document.querySelectorAll('.closet-item').length === 1", timeout=5000)
+            self.assertEqual(page.evaluate("window.__calls.closet_remove"), 1)
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_a_failed_add_shows_its_error_in_the_popup(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#browse", [], init_extra=self.SLOW)
+            page.evaluate("openFilmModal('12-angry-men')")
+            page.wait_for_function("document.querySelector('.closet-toggle').textContent.includes('Add to my closet')")
+            page.evaluate("window.__fail.closet_add = 1; window.__failMsg = 'a closet holds at most 200 films'")
+            page.click(".closet-toggle")
+            page.wait_for_selector(".closet-toggle-msg:has-text('at most 200 films')")
+            self.assertTrue(page.locator(".closet-toggle").is_enabled(), "the person can try again")
+            page.click(".closet-toggle")                                    # next attempt works and clears the message
+            page.wait_for_function("document.querySelector('.closet-toggle').textContent.includes('In my closet')")
+            self.assertEqual(page.locator(".closet-toggle-msg").inner_text(), "")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_a_failed_load_from_a_direct_film_link_is_explained_and_can_be_retried(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#film/12-angry-men", [], init_extra=self.SLOW + "window.__fail.closets = 1; window.__failMsg = 'closets unavailable';")
+            page.wait_for_selector(".closet-toggle-msg:has-text('closets unavailable')")
+            self.assertIn("retry", page.locator(".closet-toggle").inner_text().lower())
+            self.assertTrue(page.locator(".closet-toggle").is_enabled())
+            page.click(".closet-toggle")
+            page.wait_for_function("document.querySelector('.closet-toggle').textContent.includes('Add to my closet')")
+            self.assertEqual(page.locator(".closet-toggle-msg").inner_text(), "")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_a_failed_load_on_the_closet_tab_offers_a_retry(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.closet_page(p, "#closet", ["12-angry-men"], init_extra=self.SLOW + "window.__fail.closets = 1; window.__failMsg = 'closets unavailable';")
+            page.wait_for_selector(".club-error:has-text('closets unavailable')")
+            page.click("button:has-text('Retry')")
+            page.wait_for_selector("#main h3:has-text('My picks')")
             self.assertEqual(errors, [])
             browser.close()
 

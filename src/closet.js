@@ -2,7 +2,11 @@
 /* A person's own picks, kept in the Pages shared data (server.js: closet_picks),
  * public inside the page. The "For you" list is the existing co-pick ranking
  * (computeRecommendations) seeded with the closet. */
-const CLOSET = { rows: null, error: "", busy: false, viewing: null, search: "" };
+/* One shared state for every consumer (the closet view and the popup toggles): `rows` once
+ * loaded, `loading` while a load is in flight, `loadError` if the latest load failed, `error`
+ * for a failed action, `busy` while an action runs (controls are disabled and a second action
+ * is ignored). Whenever one of these changes, notifyClosets() repaints all consumers. */
+const CLOSET = { rows: null, error: "", loadError: "", loading: false, busy: false, viewing: null, search: "" };
 let closetLoadSeq = 0;
 
 const hasHost = () => !!(window.pages && window.pages.call);
@@ -35,7 +39,7 @@ function nearestVisitors(mine, n = 5) {
   return out.slice(0, n);
 }
 
-/* Everyone else's closets, most picks in common first, then bigger closet, then name. */
+/* Everyone else's closets, most picks in common first, then name. */
 function otherClosets(people, meId, mine) {
   const out = [];
   for (const p of people.values()) {
@@ -44,26 +48,40 @@ function otherClosets(people, meId, mine) {
     for (const s of p.slugs) if (mine.has(s)) shared++;
     out.push({ person: p, shared });
   }
-  out.sort((a, b) => b.shared - a.shared || b.person.slugs.size - a.person.slugs.size || a.person.name.localeCompare(b.person.name));
+  out.sort((a, b) => b.shared - a.shared || a.person.name.localeCompare(b.person.name));
   return out;
 }
 
+function notifyClosets() {
+  refreshClosetToggles();
+  if (STATE.view === "closet") renderView();
+}
+
+/* Only the latest load counts; superseded loads, successes and failures alike, are ignored. */
 async function loadClosets() {
   const seq = ++closetLoadSeq;
-  let rows;
+  CLOSET.loading = true; CLOSET.loadError = "";
+  let ok = false;
   try {
-    rows = await window.pages.call("closets", {});
+    const rows = await window.pages.call("closets", {});
+    if (seq !== closetLoadSeq) return false;
+    CLOSET.rows = rows; ok = true;
   } catch (e) {
     if (seq !== closetLoadSeq) return false;
-    throw e;
+    CLOSET.loadError = e.message || String(e);
   }
-  if (seq !== closetLoadSeq) return false;     // a newer load is on its way
-  CLOSET.rows = rows;
-  return true;
+  CLOSET.loading = false;
+  notifyClosets();
+  return ok;
+}
+function ensureClosets() {
+  if (!CLOSET.rows && !CLOSET.loading) loadClosets();
 }
 
 async function closetAct(action, slug) {
+  if (CLOSET.busy) return;                       // one action at a time
   CLOSET.busy = true; CLOSET.error = "";
+  notifyClosets();                               // disables every control at once
   try {
     await window.pages.call(action, { film_slug: slug, by_name: window.pages.currentUser?.()?.name || "" });
     await loadClosets();
@@ -71,8 +89,7 @@ async function closetAct(action, slug) {
     CLOSET.error = e.message || String(e);
   }
   CLOSET.busy = false;
-  if (STATE.view === "closet") renderView();
-  refreshClosetToggles();
+  notifyClosets();
 }
 
 const myClosetSet = () => {
@@ -81,22 +98,28 @@ const myClosetSet = () => {
   return p ? p.slugs : new Set();
 };
 
-/* The button in the film popup. Hidden when there is no Pages host. */
+/* The button in the film popup, with a line for errors. Hidden when there is no Pages host. */
 function closetToggleEl(slug) {
   if (!hasHost()) return null;
   const btn = el("button", { class: "btn small closet-toggle", type: "button", "data-slug": slug });
+  const msg = el("span", { class: "closet-toggle-msg", role: "alert" });
   const paint = () => {
     const inCloset = myClosetSet().has(slug);
-    btn.textContent = CLOSET.rows ? (inCloset ? "✓ In my closet" : "+ Add to my closet") : "My closet…";
-    btn.classList.toggle("ghost", inCloset);
-    btn.disabled = !CLOSET.rows || CLOSET.busy;
+    const failed = !CLOSET.rows && CLOSET.loadError;
+    btn.textContent = CLOSET.rows ? (inCloset ? "✓ In my closet" : "+ Add to my closet") : (failed ? "Retry my closet" : "My closet…");
+    btn.classList.toggle("ghost", !!inCloset);
+    btn.disabled = CLOSET.busy || (!CLOSET.rows && !failed);
     btn.title = inCloset ? "Remove from my closet" : "Pick this film for my closet";
+    msg.textContent = CLOSET.error || CLOSET.loadError || "";
   };
-  btn.addEventListener("click", () => { closetAct(myClosetSet().has(slug) ? "closet_remove" : "closet_add", slug); });
+  btn.addEventListener("click", () => {
+    if (!CLOSET.rows) loadClosets();             // recovery after a failed load
+    else closetAct(myClosetSet().has(slug) ? "closet_remove" : "closet_add", slug);
+  });
   btn._paint = paint;
   paint();
-  if (!CLOSET.rows) loadClosets().then(refreshClosetToggles, () => {});
-  return btn;
+  ensureClosets();
+  return el("span", { class: "closet-toggle-wrap" }, btn, msg);
 }
 function refreshClosetToggles() {
   for (const b of $$(".closet-toggle")) if (b._paint) b._paint();
@@ -111,12 +134,15 @@ function renderCloset(root) {
   }
   const body = el("section", { class: "closet" });
   root.append(body);
-  const paint = () => { body.innerHTML = ""; paintCloset(body); };
-  if (!CLOSET.rows) {
-    body.append(el("p", { class: "club-note" }, "Loading closets…"));
-    loadClosets().then(ok => { if (ok && STATE.view === "closet") paint(); },
-                       e => { CLOSET.error = e.message; CLOSET.rows = []; if (STATE.view === "closet") paint(); });
-  } else paint();
+  if (CLOSET.rows) { paintCloset(body); return; }
+  if (CLOSET.loadError) {
+    body.append(el("h2", {}, "My closet"),
+      el("p", { class: "club-error", role: "alert" }, CLOSET.loadError),
+      el("button", { class: "btn small", onclick: () => loadClosets() }, "Retry"));
+    return;
+  }
+  body.append(el("p", { class: "club-note" }, "Loading closets…"));
+  ensureClosets();                               // notifyClosets() repaints this view when it arrives
 }
 
 function closetPosterGrid(slugs, opts = {}) {
@@ -140,7 +166,8 @@ function paintCloset(body) {
   const mine = mineP ? mineP.slugs : new Set();
   const viewing = CLOSET.viewing && CLOSET.viewing !== me ? CLOSET.viewing : null;
   const append = (...kids) => body.append(...kids.filter(Boolean));
-  const err = CLOSET.error ? el("p", { class: "club-error", role: "alert" }, CLOSET.error) : null;
+  const msgText = CLOSET.error || CLOSET.loadError;
+  const err = msgText ? el("p", { class: "club-error", role: "alert" }, msgText) : null;
 
   if (viewing) {
     const other = people.get(viewing);

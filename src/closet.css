@@ -6,3 +6,5 @@
   .film-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
   .closet-near a, .closet-others a { color: var(--accent-bright); text-decoration: none; border-bottom: 1px solid var(--accent-deep); }
   .closet-near a:hover, .closet-others a:hover { color: var(--ink); }
+  .closet-toggle-wrap { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .closet-toggle-msg { color: var(--crimson); font-size: 14px; }
