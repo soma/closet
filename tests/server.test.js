@@ -29,9 +29,9 @@ test("rejects unknown film, unknown club, bad dates and bad times", async () => 
   const s = setup(); const c = await club(s);
   await assert.rejects(s.ann("add_entry", { club_id: c, film_slug: "nope" }), /unknown film/);
   await assert.rejects(s.ann("add_entry", { club_id: "zzz", film_slug: "a" }), /unknown club/);
-  await assert.rejects(s.ann("add_entry", { club_id: c, film_slug: "a", watched_on: "2026-13-40" }), /YYYY-MM-DD/);
+  await assert.rejects(s.ann("add_entry", { club_id: c, film_slug: "a", watched_on: "2026-13-40" }), /real date/);
   const { id } = await s.ann("add_entry", { club_id: c, film_slug: "a" });
-  await assert.rejects(s.ann("set_time", { club_id: c, entry_id: id, scheduled_for: "tomorrow" }), /time must be/);
+  await assert.rejects(s.ann("set_time", { club_id: c, entry_id: id, scheduled_for: "tomorrow" }), /real date and time/);
   await assert.rejects(s.ann("create_club", { name: "  " }), /needs a name/);
 });
 
@@ -139,4 +139,21 @@ test("clubs are listed and states are isolated per club", async () => {
   await s.ann("add_entry", { club_id: c1, film_slug: "a" });
   assert.equal((await state(s, c2)).entries.length, 0);
   assert.deepEqual((await s.ann("list_clubs", {})).map(c => c.name), ["Cinema Club", "Other"]);
+});
+
+test("impossible calendar dates and times are rejected and change nothing", async () => {
+  const s = setup(); const c = await club(s);
+  const a = await s.ann("add_entry", { club_id: c, film_slug: "a" });
+  const before = JSON.stringify([s.host.db.entries, s.host.db.log]);
+  for (const d of ["2026-02-31", "2027-02-29", "2026-04-31", "2026-00-10", "2026-13-01"]) {
+    await assert.rejects(s.ann("add_entry", { club_id: c, film_slug: "b", watched_on: d }), /real date/, d);
+    await assert.rejects(s.ann("mark_watched", { club_id: c, entry_id: a.id, watched_on: d }), /real date/, d);
+  }
+  for (const t of ["2026-02-31T19:00", "2026-05-01T25:00", "2026-05-01T19:60", "2026-05-01 19:00"]) {
+    await assert.rejects(s.ann("set_time", { club_id: c, entry_id: a.id, scheduled_for: t }), /real date and time/, t);
+  }
+  assert.equal(JSON.stringify([s.host.db.entries, s.host.db.log]), before);
+  // leap day is real in a leap year
+  await s.ann("add_entry", { club_id: c, film_slug: "b", watched_on: "2028-02-29" });
+  await s.ann("set_time", { club_id: c, entry_id: a.id, scheduled_for: "2028-02-29T23:59" });
 });

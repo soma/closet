@@ -9,13 +9,18 @@ const TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
 function fail(message) { throw new Error(message); }
 
+// Exact round trip: JavaScript normalises 2026-02-31 to March 3, so compare back.
 function validDate(s, what) {
-  if (typeof s !== "string" || !DATE_RE.test(s) || Number.isNaN(Date.parse(s + "T00:00:00Z"))) fail(`${what} must be YYYY-MM-DD`);
+  const ok = typeof s === "string" && DATE_RE.test(s) && !Number.isNaN(Date.parse(s + "T00:00:00Z")) &&
+    new Date(s + "T00:00:00Z").toISOString().slice(0, 10) === s;
+  if (!ok) fail(`${what} must be a real date, YYYY-MM-DD`);
   return s;
 }
 function validTime(s) {
   if (s == null) return null;
-  if (typeof s !== "string" || !TIME_RE.test(s) || Number.isNaN(Date.parse(s + ":00Z"))) fail("time must be YYYY-MM-DDTHH:MM");
+  const ok = typeof s === "string" && TIME_RE.test(s) && !Number.isNaN(Date.parse(s + ":00Z")) &&
+    new Date(s + ":00Z").toISOString().slice(0, 16) === s;
+  if (!ok) fail("time must be a real date and time, YYYY-MM-DDTHH:MM");
   return s;
 }
 function name(s) { return typeof s === "string" ? s.trim().slice(0, MAX_NAME) : ""; }

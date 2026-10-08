@@ -2243,13 +2243,16 @@ const todayStr = () => new Date().toLocaleDateString("sv-SE");
 const whoOf = row => row.data.by_name || "someone";
 const fmtWhen = s => s ? s.replace("T", " ") : "";
 
-async function clubAct(action, args) {
+/* A response only counts if the user is still looking at the club it was
+ * asked for, and it is the latest request for it. */
+let clubLoadSeq = 0;
+async function clubAct(clubId, action, args) {
   CLUB.busy = true; CLUB.error = "";
   try {
-    await hostCall(action, args);
-    await loadClub();
+    await hostCall(action, { club_id: clubId, ...args });
+    await loadClub(clubId);
   } catch (e) {
-    CLUB.error = e.message || String(e);
+    if (CLUB.id === clubId) CLUB.error = e.message || String(e);
   }
   CLUB.busy = false;
   renderView();
@@ -2258,8 +2261,13 @@ async function loadClubs() {
   try { CLUB.clubs = await window.pages.call("list_clubs", {}); CLUB.error = ""; }
   catch (e) { CLUB.clubs = []; CLUB.error = e.message || String(e); }
 }
-async function loadClub() {
-  CLUB.data = await window.pages.call("club_state", { club_id: CLUB.id });
+/* Resolves true when `id`'s data was stored, false when the response was stale. */
+async function loadClub(id) {
+  const seq = ++clubLoadSeq;
+  const data = await window.pages.call("club_state", { club_id: id });
+  if (seq !== clubLoadSeq || CLUB.id !== id) return false;
+  CLUB.data = data;
+  return true;
 }
 
 function renderClubs(root) {
@@ -2274,10 +2282,13 @@ function renderClubs(root) {
   const paint = () => { body.innerHTML = ""; CLUB.id ? paintClub(body) : paintClubList(body); };
   if (CLUB.id && !CLUB.data) {
     body.append(el("p", { class: "club-note" }, "Loading club…"));
-    loadClub().then(paint, e => { CLUB.error = e.message; CLUB.id = null; writeHash(); renderView(); });
+    const id = CLUB.id;
+    loadClub(id).then(
+      ok => { if (ok && CLUB.id === id) paint(); },
+      e => { if (CLUB.id === id) { CLUB.error = e.message; CLUB.id = null; writeHash(); renderView(); } });
   } else if (!CLUB.id && !CLUB.clubs) {
     body.append(el("p", { class: "club-note" }, "Loading clubs…"));
-    loadClubs().then(paint);
+    loadClubs().then(() => { if (!CLUB.id) paint(); });
   } else paint();
 }
 
@@ -2304,6 +2315,7 @@ function paintClubList(body) {
 }
 
 function openClub(id) {
+  clubLoadSeq++;
   CLUB.id = id; CLUB.data = null; CLUB.search = ""; CLUB.error = "";
   writeHash(); renderView();
 }
@@ -2331,13 +2343,14 @@ function filmThumb(slug) {
 function paintClub(body) {
   const d = CLUB.data;
   const entries = d.entries;
+  const cid = d.club.id;   // every action below is bound to the club this data belongs to
   const current = entries.find(e => e.data.state === "current");
   const upcoming = entries.filter(e => e.data.state === "upcoming").sort((a, b) =>
     (a.data.scheduled_for ? 0 : 1) - (b.data.scheduled_for ? 0 : 1) ||
     (a.data.scheduled_for || "").localeCompare(b.data.scheduled_for || "") ||
     String(a.created_at).localeCompare(String(b.created_at)));
   const watched = entries.filter(e => e.data.state === "watched").sort((a, b) => (b.data.watched_on || "").localeCompare(a.data.watched_on || ""));
-  const act = (action, e, extra) => clubAct(action, { club_id: CLUB.id, entry_id: e.id, ...extra });
+  const act = (action, e, extra) => clubAct(cid, action, { entry_id: e.id, ...extra });
 
   const timeInput = e => {
     const t = el("input", { type: "datetime-local", value: e.data.scheduled_for || "", "aria-label": "Watch time" });
@@ -2351,7 +2364,7 @@ function paintClub(body) {
   };
 
   appendAll(body,
-    el("button", { class: "btn small ghost", onclick: () => { CLUB.id = null; CLUB.data = null; CLUB.clubs = null; writeHash(); renderView(); } }, "← All clubs"),
+    el("button", { class: "btn small ghost", onclick: () => { clubLoadSeq++; CLUB.id = null; CLUB.data = null; CLUB.clubs = null; writeHash(); renderView(); } }, "← All clubs"),
     el("h2", {}, d.club.data.name),
     clubError(),
     el("h3", {}, "Current"),
@@ -2372,8 +2385,8 @@ function paintClub(body) {
           timeInput(e), watchedControl(e),
           el("button", { class: "btn small ghost", disabled: CLUB.busy, onclick: () => act("remove_entry", e) }, "Remove")))))) :
       el("p", { class: "club-note" }, "Nothing queued."),
-    suggestionsEl(entries),
-    searchEl(entries),
+    suggestionsEl(entries, cid),
+    searchEl(entries, cid),
     el("h3", {}, "Watched"),
     watched.length ? el("ul", { class: "club-list" }, watched.map(e => watchedEl(e, act))) : el("p", { class: "club-note" }, "Nothing watched yet. Add films you have already seen below, with a past date."),
     el("h3", {}, "Activity"),
@@ -2382,7 +2395,7 @@ function paintClub(body) {
   );
 }
 
-function suggestionsEl(entries) {
+function suggestionsEl(entries, cid) {
   const picks = clubQueue(DB.films, DB.filmBy, entries.map(e => e.data.film_slug), 8);
   return el("div", {},
     el("h3", {}, "Suggested by the rule"),
@@ -2391,10 +2404,10 @@ function suggestionsEl(entries) {
       filmThumb(f.film_slug),
       el("div", {}, filmLine(f.film_slug), el("span", { class: "club-meta" }, ` · ${f._pickCount} picks`),
         el("div", { class: "club-actions" },
-          el("button", { class: "btn small", disabled: CLUB.busy, onclick: () => clubAct("add_entry", { club_id: CLUB.id, film_slug: f.film_slug }) }, "Add to feed")))))));
+          el("button", { class: "btn small", disabled: CLUB.busy, onclick: () => clubAct(cid, "add_entry", { film_slug: f.film_slug }) }, "Add to feed")))))));
 }
 
-function searchEl(entries) {
+function searchEl(entries, cid) {
   const inFeed = new Set(entries.map(e => e.data.film_slug));
   const input = el("input", { type: "search", value: CLUB.search, placeholder: "Search any film or director", "aria-label": "Search films" });
   const results = el("ul", { class: "club-list" });
@@ -2409,8 +2422,8 @@ function searchEl(entries) {
     if (!hits.length) results.append(el("li", {}, "No films found (or already in this club's feed)."));
     for (const f of hits) results.append(el("li", {}, filmThumb(f.film_slug),
       el("div", {}, filmLine(f.film_slug), el("div", { class: "club-actions" },
-        el("button", { class: "btn small", disabled: CLUB.busy, onclick: () => clubAct("add_entry", { club_id: CLUB.id, film_slug: f.film_slug }) }, "Add to feed"),
-        el("button", { class: "btn small ghost", disabled: CLUB.busy, onclick: () => { CLUB.addDate = dateInput.value; clubAct("add_entry", { club_id: CLUB.id, film_slug: f.film_slug, watched_on: dateInput.value }); } }, "Add as already watched")))));
+        el("button", { class: "btn small", disabled: CLUB.busy, onclick: () => clubAct(cid, "add_entry", { film_slug: f.film_slug }) }, "Add to feed"),
+        el("button", { class: "btn small ghost", disabled: CLUB.busy, onclick: () => { CLUB.addDate = dateInput.value; clubAct(cid, "add_entry", { film_slug: f.film_slug, watched_on: dateInput.value }); } }, "Add as already watched")))));
   };
   input.addEventListener("input", debounce(run, 200));
   const wrap = el("div", {}, el("h3", {}, "Pick anything else"),

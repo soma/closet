@@ -38,6 +38,11 @@ window.pages = (function () {
   const host = makeHost(%s, []);
   return { call: (a, args) => host.call(a, args, "u1"), currentUser: () => ({ id: "u1", name: "Ann" }) };
 })();
+window.__delays = {};
+(function () {   // delay club_state per club so tests can make responses arrive out of order
+  const orig = window.pages.call;
+  window.pages.call = (a, args) => new Promise(r => setTimeout(r, a === "club_state" ? (window.__delays[args.club_id] || 0) : 0)).then(() => orig(a, args));
+})();
 """ % json.dumps(SERVER)
 
 
@@ -94,13 +99,23 @@ class Smoke(unittest.TestCase):
             browser, page, errors = self.page(p)
             got = page.evaluate("""() => {
               const mk = (slug, rt, picks, dir, rating = 3, year = 2000) => ({ film_slug: slug, film_title: slug, runtime_min: rt,
-                _pickCount: picks, _directors: [dir], avg_rating: rating, film_year: year });
+                _pickCount: picks, _directors: Array.isArray(dir) ? dir : [dir], avg_rating: rating, film_year: year });
               const films = [mk("s40", 40, 9, "A"), mk("s41", 41, 8, "B"), mk("l180", 180, 7, "C"), mk("l181", 181, 6, "D"),
                 mk("tie-low", 100, 5, "E", 3.1), mk("tie-high", 100, 5, "F", 4.2), mk("tie-old", 100, 4, "G", 3, 1950), mk("tie-new", 100, 4, "H", 3, 1990)];
               const filmBy = new Map(films.map(f => [f.film_slug, f]));
-              return clubQueue(films, filmBy, [], 20).map(f => f.film_slug);
+              const plain = clubQueue(films, filmBy, [], 20).map(f => f.film_slug);
+              // co-directors: a film with a taken director is skipped, and picking it takes both
+              const co = [mk("solo-x", 100, 9, "X"), mk("duo-xy", 100, 8, ["X", "Y"]), mk("solo-y", 100, 7, "Y"), mk("solo-z", 100, 6, "Z")];
+              const coBy = new Map(co.map(f => [f.film_slug, f]));
+              const coQueue = clubQueue(co, coBy, [], 20).map(f => f.film_slug);
+              const duoFirst = clubQueue(co.slice(1), coBy, [], 20).map(f => f.film_slug);
+              const feedY = clubQueue(co, coBy, ["solo-y"], 20).map(f => f.film_slug);
+              return { plain, coQueue, duoFirst, feedY };
             }""")
-            self.assertEqual(got, ["s41", "l180", "tie-high", "tie-low", "tie-old", "tie-new"])
+            self.assertEqual(got["plain"], ["s41", "l180", "tie-high", "tie-low", "tie-old", "tie-new"])
+            self.assertEqual(got["coQueue"], ["solo-x", "solo-y", "solo-z"])      # duo-xy skipped: X taken
+            self.assertEqual(got["duoFirst"], ["duo-xy", "solo-z"])               # duo takes X and Y
+            self.assertEqual(got["feedY"], ["solo-x", "solo-z"])                  # Y taken by the feed
             browser.close()
 
     def test_club_flow_with_shared_state(self):
@@ -126,6 +141,66 @@ class Smoke(unittest.TestCase):
             self.assertIn("Ann \u00b7 rate", page.inner_text(".club-log"))
             self.assertNotIn("null", page.inner_text("#main"))
             self.assertEqual(errors, [])
+            browser.close()
+
+    def test_slow_response_for_a_previous_club_never_overwrites_the_current_one(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.page(p, fake=True)
+            ids = page.evaluate("""async () => {
+              const a = await window.pages.call("create_club", { name: "Club A" });
+              const b = await window.pages.call("create_club", { name: "Club B" });
+              window.__delays[a.id] = 600;
+              return [a.id, b.id];
+            }""")
+            a, b = ids
+            page.evaluate(f"location.hash = '#clubs/{a}'")      # A starts loading (slow)
+            page.wait_for_timeout(100)
+            page.evaluate(f"location.hash = '#clubs/{b}'")      # user switches to B (fast)
+            page.wait_for_selector("#main h2:has-text('Club B')")
+            page.wait_for_timeout(900)                           # A's response arrives late
+            page.evaluate("renderView()")                        # any repaint must still show B
+            self.assertIn("Club B", page.inner_text("#main h2"))
+            self.assertEqual(page.evaluate("CLUB.data.club.data.name"), "Club B")
+            page.click(".suggestions li >> nth=0 >> text=Add to feed")
+            page.wait_for_selector(".club-current")
+            counts = page.evaluate(f"""async () => [
+              (await window.pages.call("club_state", {{ club_id: "{a}" }})).entries.length,
+              (await window.pages.call("club_state", {{ club_id: "{b}" }})).entries.length]""")
+            self.assertEqual(counts, [0, 1])
+            # navigating away to the list while a club is still loading must show the list
+            page.evaluate(f"location.hash = '#clubs/{a}'")
+            page.wait_for_timeout(100)
+            page.evaluate("location.hash = '#clubs'")
+            page.wait_for_selector("text=Film clubs")
+            page.wait_for_timeout(900)
+            self.assertIn("Film clubs", page.inner_text("#main h2"))
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_out_of_band_short_and_long_films_can_be_picked(self):
+        d = json.loads((ROOT / "data/closet.json").read_text(encoding="utf-8"))
+        fc, pc = d["films"]["cols"], d["picks"]["cols"]
+        picked = {r[pc.index("film_slug")] for r in d["picks"]["rows"]}
+        films = [dict(zip(fc, r)) for r in d["films"]["rows"]]
+        titles = [f["film_title"] for f in films]
+        short = next(f for f in films if f["film_slug"] in picked and f["runtime_min"] <= SHORT_MAX and titles.count(f["film_title"]) == 1)
+        long_ = next(f for f in films if f["film_slug"] in picked and f["runtime_min"] > LONG_MAX and titles.count(f["film_title"]) == 1)
+        with sync_playwright() as p:
+            browser, page, errors = self.page(p, fake=True)
+            self.assertNotIn(short["film_slug"], reference_queue(n=2000))
+            self.assertNotIn(long_["film_slug"], reference_queue(n=2000))
+            page.evaluate("location.hash = '#clubs'")
+            page.fill("input[aria-label='New club name']", "Odd Picks")
+            page.click("text=Create club")
+            page.wait_for_selector("#main h2:has-text('Odd Picks')")
+            for n, f in enumerate((short, long_), 1):
+                page.fill("input[aria-label='Search films']", f["film_title"])
+                page.wait_for_selector(f".club-list li:has-text(\"{f['film_title']}\") >> text=Add to feed")
+                page.click(f".club-list li:has-text(\"{f['film_title']}\") >> text=Add to feed >> nth=0")
+                page.wait_for_function("(n) => CLUB.data && CLUB.data.entries.length === n && !CLUB.busy", arg=n)
+            state = page.evaluate("""async () => { const cs = await window.pages.call("list_clubs", {});
+              return (await window.pages.call("club_state", { club_id: cs[0].id })).entries.map(e => e.data.film_slug); }""")
+            self.assertEqual(sorted(state), sorted([short["film_slug"], long_["film_slug"]]))
             browser.close()
 
     def test_clubs_tab_without_host_explains_itself(self):
