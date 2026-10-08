@@ -1165,8 +1165,10 @@ function applyHash() {
   if (r.view) STATE.view = r.view;
   STATE.film = r.film || null;
   if (r.seeds) STATE.rc.seeds = r.seeds.filter(s => DB.filmBy.has(s));
-  const club = r.view === "clubs" ? (r.club || null) : null;
-  if (club !== CLUB.id) { CLUB.id = club; CLUB.data = null; CLUB.error = ""; }
+  if (r.view) {     // a film route leaves the view, and the club selected in it, as they were
+    const club = r.view === "clubs" ? (r.club || null) : null;
+    if (club !== CLUB.id) { CLUB.id = club; CLUB.data = null; CLUB.error = ""; }
+  }
 }
 
 /* ============== RENDER: SHELL ============== */
@@ -2028,7 +2030,11 @@ function closeModal() {
 /* Open or close the film popup to match the address (#film/<slug>). */
 function syncFilmModal() {
   if (STATE.film && DB.filmBy.has(STATE.film)) openFilmModal(STATE.film);
-  else if (STATE.film) { STATE.film = null; writeHash(); }   // unknown film: back to the view
+  else if (STATE.film) {   // unknown film: close whatever popup is showing and go back to the view
+    STATE.film = null;
+    if ($("#modal-mount").firstChild) closeModal();
+    writeHash();
+  }
   else if ($("#modal-mount").firstChild) closeModal();
 }
 function showModal(content) {

@@ -347,6 +347,33 @@ class Smoke(unittest.TestCase):
             self.assertEqual(errors, [])
             browser.close()
 
+    def test_navigating_from_a_film_to_an_unknown_film_closes_the_popup(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.page_at(p, "#film/12-angry-men")
+            page.wait_for_selector(".film-modal h3:has-text('12 Angry Men')")
+            self.assertEqual(page.evaluate("document.body.style.overflow"), "hidden")
+            page.evaluate("location.hash = '#film/no-such-film'")
+            page.wait_for_function("document.querySelectorAll('.film-modal').length === 0")
+            self.assertEqual(page.evaluate("document.body.style.overflow"), "")
+            self.assertEqual(page.evaluate("location.hash"), "#browse")
+            self.assertIsNone(page.evaluate("STATE.film"))
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_a_film_link_over_a_club_keeps_the_club(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1")
+            page.wait_for_selector("#main h2:has-text('Preset Club')")
+            page.evaluate("location.hash = '#film/12-angry-men'")
+            page.wait_for_selector(".film-modal h3:has-text('12 Angry Men')")
+            self.assertEqual(page.evaluate("[STATE.view, CLUB.id]"), ["clubs", "id1"])
+            page.keyboard.press("Escape")
+            page.wait_for_function("document.querySelectorAll('.film-modal').length === 0")
+            self.assertEqual(page.evaluate("location.hash"), "#clubs/id1")
+            page.wait_for_selector("#main h2:has-text('Preset Club')")
+            self.assertEqual(errors, [])
+            browser.close()
+
     def test_a_film_link_to_an_unknown_film_falls_back_quietly(self):
         with sync_playwright() as p:
             browser, page, errors = self.page_at(p, "#film/no-such-film")
