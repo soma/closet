@@ -25,9 +25,19 @@ class Blocked(Exception):
     pass
 
 
-def get(path, delay):
-    cached = CACHE / (re.sub(r"[^A-Za-z0-9._-]", "_", path.strip("/")) + ".html")
-    if cached.exists():
+class ParseError(Exception):
+    pass
+
+
+def cache_path(path):
+    return CACHE / (re.sub(r"[^A-Za-z0-9._-]", "_", path.strip("/")) + ".html")
+
+
+def get(path, delay, refresh=False):
+    """Fetch path. Detail pages are cached and reused; refresh=True (used for
+    the list index, which changes) always goes to the network."""
+    cached = cache_path(path)
+    if cached.exists() and not refresh:
         return cached.read_text(encoding="utf-8")
     time.sleep(delay)
     req = urllib.request.Request(BASE + path, headers={"User-Agent": USER_AGENT})
@@ -45,6 +55,8 @@ def get(path, delay):
 def parse_index(page):
     """Return (list slugs in page order, last page number)."""
     slugs = re.findall(r'<h2 class="name prettify">\s*<a href="/closetpicks/list/([^/"]+)/"', page)
+    if not slugs:
+        raise ParseError("no closet lists recognised on the index page")
     pages = [int(n) for n in re.findall(r'/closetpicks/lists/page/(\d+)/', page)]
     return slugs, max(pages, default=1)
 
@@ -57,7 +69,9 @@ def meta(page, prop):
 def parse_list(slug, page):
     """Return (visit dict, [(pick_order, film_slug, film_title, film_year)])."""
     h1 = re.search(r'<h1 class="title-1 prettify">\s*([^<]*?)\s*</h1>', page)
-    title = html.unescape(h1.group(1)) if h1 else meta(page, "title")
+    if not h1:
+        raise ParseError(f"list {slug}: no title recognised")
+    title = html.unescape(h1.group(1))
     description = meta(page, "description")
     date = DATE_RE.search(description)
     m = re.match(r"(.+?)['’]s? Criterion Closet Picks$", title)
@@ -68,6 +82,8 @@ def parse_list(slug, page):
         full = html.unescape(m.group(1))
         y = re.search(r"^(.*?)(?: \((\d{4})\))?$", full)
         picks.append((order, m.group(2), y.group(1), int(y.group(2)) if y.group(2) else None))
+    if not picks:
+        raise ParseError(f"list {slug}: no films recognised")
     youtube = re.search(r'href="(https://www\.youtube\.com/watch\?[^"]+)"', page)
     shop = re.search(r'href="(https://www\.criterion\.com/shop/collection/[^"]+)"', page)
     visit = {
@@ -120,6 +136,17 @@ def parse_film(slug, title, year, page):
     }
 
 
+def fetch_parsed(path, delay, parser, refresh=False):
+    """get + parse; a page that does not parse is evicted from the cache so a
+    rerun refetches it instead of replaying a bad response."""
+    page = get(path, delay, refresh)
+    try:
+        return parser(page)
+    except ParseError as e:
+        cache_path(path).unlink(missing_ok=True)
+        raise ParseError(f"{path}: {e}")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="new.json")
@@ -133,7 +160,7 @@ def main(argv=None):
     try:
         new_slugs, page_no, last = [], 1, 1
         while page_no <= last:
-            slugs, last = parse_index(get("/closetpicks/lists/" + (f"page/{page_no}/" if page_no > 1 else ""), args.delay))
+            slugs, last = fetch_parsed("/closetpicks/lists/" + (f"page/{page_no}/" if page_no > 1 else ""), args.delay, parse_index, refresh=True)
             fresh = [s for s in slugs if s not in have_visits]
             new_slugs += fresh
             print(f"index page {page_no}/{last}: {len(fresh)} new")
@@ -143,7 +170,7 @@ def main(argv=None):
         new_slugs = list(dict.fromkeys(new_slugs))[: args.max_visits]
         visits, picks, films = [], [], {}
         for slug in new_slugs:
-            visit, vpicks = parse_list(slug, get(f"/closetpicks/list/{slug}/", args.delay))
+            visit, vpicks = fetch_parsed(f"/closetpicks/list/{slug}/", args.delay, lambda page, slug=slug: parse_list(slug, page))
             visits.append(visit)
             for order, fslug, ftitle, fyear in vpicks:
                 picks.append({"visit_slug": slug, "pick_order": order, "film_slug": fslug, "film_title": ftitle, "film_year": fyear})
@@ -153,13 +180,19 @@ def main(argv=None):
     except Blocked as e:
         print(f"fetch_letterboxd: {e}\nNothing written; fetched pages are cached, rerun to continue.", file=sys.stderr)
         return 2
+    except ParseError as e:
+        print(f"fetch_letterboxd: page not recognised, Letterboxd's markup may have changed: {e}\nNothing written.", file=sys.stderr)
+        return 3
 
     def table(name, rows):
         cols = data[name]["cols"]
         return {"cols": cols, "rows": [[r.get(c) for c in cols] for r in rows]}
 
     out = {"visits": table("visits", visits), "picks": table("picks", picks), "films": table("films", films.values())}
-    pathlib.Path(args.out).write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    target = pathlib.Path(args.out)
+    tmp = target.with_name(target.name + ".tmp")
+    tmp.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(target)
     print(f"wrote {args.out}: {len(visits)} visits, {len(picks)} picks, {len(films)} new films")
     return 0
 

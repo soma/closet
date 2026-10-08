@@ -24,8 +24,11 @@
 - Known risk: Pages runs in a sandboxed iframe with a locked CSP. Google Fonts and Letterboxd poster images may be blocked. The CSS already has serif/mono fallbacks; posters already have an `err` state. We cannot check the CSP from here, so the staged preview must be opened by a human, then `read_page_events` is checked. If posters are blocked, a follow-up decides between dropping them or bundling them as assets (not decided now).
 - Staging never publishes; a human publishes.
 
+## Addendum (user decision, same day)
+The user asked to recreate the old fetcher, citing a hobby film club and public data. Scope added: `scripts/fetch_letterboxd.py`, run by the user from their own machine, with an honest user agent, delays, caching of detail pages, and stop-on-403/429. It does not evade blocks. The tool does not run in this session's environment. Letterboxd's terms and robots.txt remain the user's responsibility; the official API stays the recommended route.
+
 ## Out of scope
-Rewriting the UI, adding features, scraping, or publishing.
+Rewriting the UI, adding features, running any scrape from this environment, or publishing.
 
 ## Testing
 Entry point is `script/test`, which runs everything below. `python3 -m unittest` for merge/validation (fixtures with duplicate slugs, orphan picks, bad counts), plus the build round-trip and browser smoke test.
