@@ -73,7 +73,7 @@ let clubLoadSeq = 0;
 async function clubAct(clubId, action, args) {
   if (CLUB.busy) return;                         // one action at a time
   CLUB.busy = true; CLUB.error = "";
-  if (CLUB.id === clubId && CLUB.data) renderView();   // disable the controls at once
+  if (CLUB.id === clubId && CLUB.data) $$("#main .club button").forEach(b => { b.disabled = true; });   // at once, without repainting (drafts stay)
   try {
     await hostCall(action, { club_id: clubId, ...args });
     await loadClub(clubId);
@@ -189,6 +189,12 @@ function clubParticipants(d) {
   for (const r of d.ratings || []) note(r, "rated");
   for (const p of people.values()) p.name = p.name || "someone";
   return [...people.values()].sort((a, b) => a.name.localeCompare(b.name) || a.author.localeCompare(b.author));
+}
+
+/* Replace just the participants list in place (see notifyClosets). */
+function refreshParticipants() {
+  const old = $("#main .club-participants");
+  if (old && CLUB.data && CLUB.id) old.replaceWith(participantsEl(CLUB.data, CLUB.data.club.id));
 }
 
 function participantsEl(d, cid) {

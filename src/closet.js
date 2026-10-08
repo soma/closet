@@ -54,8 +54,10 @@ function otherClosets(people, meId, mine) {
 
 function notifyClosets() {
   refreshClosetToggles();
-  // the club view shows links to closets, so it repaints when they arrive
-  if (STATE.view === "closet" || (STATE.view === "clubs" && CLUB.id && CLUB.data)) renderView();
+  if (STATE.view === "closet") renderView();
+  // The club view shows links to closets. Refresh only its participants list: repainting the
+  // whole club would wipe a rating or note somebody is in the middle of typing.
+  else if (STATE.view === "clubs" && CLUB.id && CLUB.data) refreshParticipants();
 }
 
 /* Only the latest load counts; superseded loads, successes and failures alike, are ignored. */

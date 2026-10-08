@@ -843,6 +843,23 @@ class Smoke(unittest.TestCase):
             self.assertEqual(errors, [])
             browser.close()
 
+    def test_a_background_closets_load_does_not_wipe_a_rating_being_typed(self):
+        watched = """(async () => { await __host.call("add_entry", { club_id: "id1", film_slug: "12-angry-men", watched_on: "2026-01-01" }, "u1"); })();"""
+        for fail in (False, True):
+            with sync_playwright() as p:
+                extra = self.SLOW + watched + self.PEOPLE + "window.__delay.closets = 700;" + ("window.__fail.closets = 1; window.__failMsg = 'closets unavailable';" if fail else "")
+                browser, page, errors = self.open_link(p, "#clubs/id1", init_extra=extra)
+                page.wait_for_selector("select[aria-label='Your score']")
+                page.select_option("select[aria-label='Your score']", "8")
+                page.fill("textarea[aria-label='Your note']", "half-typed thought")
+                page.wait_for_function("window.__calls.closets >= 1 && !CLOSET.loading", timeout=5000)     # the load finished, either way
+                if not fail:
+                    page.wait_for_selector(".participants li a.participant-closet")                         # and the links appeared
+                self.assertEqual(page.input_value("select[aria-label='Your score']"), "8", f"fail={fail}")
+                self.assertEqual(page.input_value("textarea[aria-label='Your note']"), "half-typed thought", f"fail={fail}")
+                self.assertEqual(errors, [])
+                browser.close()
+
     def test_a_slow_join_disables_the_button_and_ignores_a_second_click(self):
         with sync_playwright() as p:
             browser, page, errors = self.open_link(p, "#clubs/id1", init_extra=self.SLOW)
