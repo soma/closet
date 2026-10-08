@@ -51,7 +51,7 @@ async function clubAct(clubId, action, args) {
   renderView();
 }
 async function loadClubs() {
-  try { CLUB.clubs = await window.pages.call("list_clubs", {}); CLUB.error = ""; }
+  try { CLUB.clubs = await window.pages.call("list_clubs", {}); }
   catch (e) { CLUB.clubs = []; CLUB.error = e.message || String(e); }
 }
 /* Resolves true when `id`'s data was stored, false when the response was stale. */
@@ -166,6 +166,8 @@ function paintClub(body) {
   appendAll(body,
     el("button", { class: "btn small ghost", onclick: () => { clubLoadSeq++; CLUB.id = null; CLUB.data = null; CLUB.clubs = null; writeHash(); renderView(); } }, "← All clubs"),
     el("h2", {}, d.club.data.name),
+    el("p", { class: "club-meta" }, "Link to this club: add ",
+      el("code", { class: "club-link" }, "#clubs/" + encodeURIComponent(cid)), " to the end of the page address"),
     clubError(),
     el("h3", {}, "Current"),
     current

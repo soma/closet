@@ -233,6 +233,37 @@ class Smoke(unittest.TestCase):
             self.assertEqual(sorted(state), sorted([short["film_slug"], long_["film_slug"]]))
             browser.close()
 
+    def open_link(self, p, hash_, preset=True):
+        """Load the page straight on a link, as someone following it would."""
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        pre = 'window.pages.call("create_club", { name: "Preset Club" });' if preset else ""
+        page.add_init_script(FAKE_PAGES + pre)
+        page.goto((ROOT / "dist/index.html").as_uri() + hash_)
+        return browser, page, errors
+
+    def test_link_straight_into_a_club(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/id1")
+            page.wait_for_selector("#main h2:has-text('Preset Club')")
+            self.assertEqual(page.evaluate("location.hash"), "#clubs/id1")
+            self.assertIn("#clubs/id1", page.inner_text(".club-link"))
+            page.reload()                                         # a reload keeps you in the club
+            page.wait_for_selector("#main h2:has-text('Preset Club')")
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_link_to_an_unknown_club_falls_back_to_the_list_with_a_message(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.open_link(p, "#clubs/does-not-exist")
+            page.wait_for_selector("#main h2:has-text('Film clubs')")
+            page.wait_for_selector(".club-error:has-text('unknown club')")
+            self.assertEqual(page.evaluate("location.hash"), "#clubs")
+            self.assertEqual(errors, [])
+            browser.close()
+
     def test_clubs_tab_without_host_explains_itself(self):
         with sync_playwright() as p:
             browser, page, errors = self.page(p)

@@ -29,3 +29,4 @@
   .club-log li { color: var(--ink-dim); font-family: var(--mono); font-size: 12px; padding: 3px 0; }
   .club-film a { color: var(--accent-bright); text-decoration: none; border-bottom: 1px solid var(--accent-deep); }
   .club-film a:hover { color: var(--ink); }
+  .club-link { font-family: var(--mono); color: var(--accent-bright); user-select: all; }
