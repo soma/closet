@@ -9,7 +9,7 @@ Criterion Closet picks explorer: one self-contained page, vanilla JS.
 - `script/test` runs everything. One-time setup for the browser check:
   `python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/playwright install chromium`
 
-Quick start: `make help`. To refresh the data from your own machine: `make refresh`.
+Quick start: `make help`. To refresh the data: `make refresh`.
 
 For the Pages upload, build with the page address so the share icon copies the right link: `PAGES_URL=<the Pages share URL> make build`, then upload `dist/`. The address contains a token, so it is only baked into `dist/index.html`, never the committed `index.html`.
 

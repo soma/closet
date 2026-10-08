@@ -1,9 +1,10 @@
 # Updating the closet data and the Pages app
 
-Two halves, because scraping is blocked for the agent and only Claude can use the Pages tools.
+Two halves, because Letterboxd blocks automated requests from the agent's sandbox and the Pages
+tools are only available to the agent.
 
-**On your machine: `make update`**
-1. `make fetch` finds visits missing from `data/closet.json`, writes `new.json` (needs your own network access).
+**Locally: `make update`**
+1. `make fetch` finds visits missing from `data/closet.json`, writes `new.json` (needs ordinary network access to Letterboxd).
 2. `make merge` validates and merges them.
 3. `make backfill-imdb` fills `imdb_id` for films that lack one (Wikidata, polite and slow; usually one request).
 4. `make posters` downloads posters for new films and repacks the sprite sheets with **stable slots**,

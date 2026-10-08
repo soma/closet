@@ -5,12 +5,12 @@ description: Use when the closet explorer data has been refreshed (make update) 
 
 # Update the closet Pages app
 
-The scraping and data steps run on the **user's machine** (`make update`): Letterboxd and
-criterion.com block this agent's environment, so never fetch from them here. This skill is the
-half that only Claude can do, through the Pages MCP tools: stage the build, upload the poster
-sheets that changed, verify on the real host.
+The scraping and data steps run **locally, outside the agent's sandbox** (`make update`):
+Letterboxd and criterion.com block automated requests from the agent's environment, so never fetch
+from them here. This skill is the half that needs the Pages MCP tools: stage the build, upload the
+poster sheets that changed, verify on the real host.
 
-Page id **266**, repo `~/projects/barsoom/lab/closet`. Film data lives inside `index.html`
+Page id **266**, working directory the repository root. Film data lives inside `index.html`
 (built from `data/closet.json`); clubs and entries are page data; posters are page assets in the
 `poster_sheets` collection. See `docs/update-pipeline.md`.
 
@@ -19,9 +19,9 @@ Page id **266**, repo `~/projects/barsoom/lab/closet`. Film data lives inside `i
   https://pages.auctionet.com/pages/266.
 - Never commit the Pages share URL (it contains a token and the repo is public). It only goes into
   `dist/index.html` through the `PAGES_URL` environment variable.
-- Do not touch uncommitted changes you did not make (for example the user's edits to the fetcher).
+- Do not touch uncommitted changes you did not make.
   Commit only the files this update produced.
-- Run `script/test` before committing. Follow CLAUDE.md: small commits, no agent mentions in commit messages.
+- Run `script/test` before committing. Small, functionally complete commits; no tool or agent mentions in commit messages.
 
 ## Steps
 1. **Decide what is left to do.** `make summary` and `python3 scripts/stage_status.py`. Counts alone
@@ -31,7 +31,7 @@ Page id **266**, repo `~/projects/barsoom/lab/closet`. Film data lives inside `i
    no sheets to upload, and `stage_status.py` says "staged and current". Otherwise continue; steps
    already done are skipped (nothing to commit in step 4, no sheets in step 6) and a failed run
    resumes at the first unfinished step. If the data was not refreshed yet, ask the user to run
-   `make update` on their machine (do not attempt the fetch).
+   `make update` locally (do not attempt the fetch).
 2. **Spot-check the new films.** The summary lists new films missing `imdb_id`, `runtime_min`,
    `avg_rating`, `directors` or `poster_url`. Film page parsing was written without a saved page, so
    gaps are expected at first; report them. A new film with no directors or runtime can never be

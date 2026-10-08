@@ -25,7 +25,7 @@
 - Staging never publishes; a human publishes.
 
 ## Addendum (user decision, same day)
-The user asked to recreate the old fetcher, citing a hobby film club and public data. Scope added: `scripts/fetch_letterboxd.py`, run by the user from their own machine, with an honest user agent, delays, caching of detail pages, and stop-on-403/429. It does not evade blocks. The tool does not run in this session's environment. Letterboxd's terms and robots.txt remain the user's responsibility; the official API stays the recommended route.
+The user asked to recreate the old fetcher, citing a hobby film club and public data. Scope added: `scripts/fetch_letterboxd.py`, run locally by the user, with an honest user agent, delays, caching of detail pages, and stop-on-403/429. It does not evade blocks. The tool does not run in this session's environment. Letterboxd's terms and robots.txt remain the user's responsibility; the official API stays the recommended route.
 
 ## Out of scope
 Rewriting the UI, adding features, running any scrape from this environment, or publishing.

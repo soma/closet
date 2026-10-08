@@ -7,12 +7,12 @@ DELAY ?= 3
 
 help:
 	@echo "make setup    one-time: venv, playwright, chromium (only needed for tests)"
-	@echo "make fetch    (DELAY=10 to go slower) find visits missing from the dataset, write new.json (run from your machine)"
+	@echo "make fetch    (DELAY=10 to go slower) find visits missing from the dataset, write new.json (needs ordinary network access)"
 	@echo "make merge    validate and merge new.json into data/closet.json"
 	@echo "make build    regenerate index.html and dist/index.html"
 	@echo "make backfill-imdb  fill blank imdb_id values from Wikidata (slow: it obeys Wikidata's rate limit)"
 	@echo "make posters  download posters and pack the sprite sheets (.cache/posters/sheets) for the Pages app"
-	@echo "make update  fetch + merge + imdb ids + posters + build + test + summary (run on your machine)"
+	@echo "make update  fetch + merge + imdb ids + posters + build + test + summary (needs ordinary network access)"
 	@echo "make poster-status  which poster sheets still need uploading to the Pages app"
 	@echo "make refresh  fetch + merge + build + test"
 	@echo "make test     run script/test"
