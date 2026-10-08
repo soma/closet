@@ -39,9 +39,17 @@ window.pages = (function () {
   return { call: (a, args) => host.call(a, args, "u1"), currentUser: () => ({ id: "u1", name: "Ann" }) };
 })();
 window.__delays = {};
-(function () {   // delay club_state per club so tests can make responses arrive out of order
+window.__plan = {};   // per club: queue of { delay, reject } consumed by successive club_state calls
+(function () {   // delay or fail club_state so tests can make responses arrive out of order
   const orig = window.pages.call;
-  window.pages.call = (a, args) => new Promise(r => setTimeout(r, a === "club_state" ? (window.__delays[args.club_id] || 0) : 0)).then(() => orig(a, args));
+  window.pages.call = (a, args) => {
+    const step = a === "club_state" ? ((window.__plan[args.club_id] || []).shift() || {}) : {};
+    const delay = step.delay != null ? step.delay : (a === "club_state" ? (window.__delays[args.club_id] || 0) : 0);
+    return new Promise(r => setTimeout(r, delay)).then(() => {
+      if (step.reject) throw new Error("stale failure");
+      return orig(a, args);
+    });
+  };
 })();
 """ % json.dumps(SERVER)
 
@@ -175,6 +183,28 @@ class Smoke(unittest.TestCase):
             page.wait_for_timeout(900)
             self.assertIn("Film clubs", page.inner_text("#main h2"))
             self.assertEqual(errors, [])
+            browser.close()
+
+    def test_stale_failure_for_a_revisited_club_does_not_disturb_the_view(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.page(p, fake=True)
+            a, b = page.evaluate("""async () => {
+              const a = await window.pages.call("create_club", { name: "Club A" });
+              const b = await window.pages.call("create_club", { name: "Club B" });
+              window.__plan[a.id] = [{ delay: 700, reject: true }, { delay: 50 }];
+              return [a.id, b.id];
+            }""")
+            page.evaluate(f"location.hash = '#clubs/{a}'")   # slow request that will fail
+            page.wait_for_timeout(100)
+            page.evaluate(f"location.hash = '#clubs/{b}'")
+            page.wait_for_selector("#main h2:has-text('Club B')")
+            page.evaluate(f"location.hash = '#clubs/{a}'")   # back to A: fast request that succeeds
+            page.wait_for_selector("#main h2:has-text('Club A')")
+            page.wait_for_timeout(1000)                        # the old failure lands now
+            self.assertEqual(page.evaluate("CLUB.id"), a)
+            self.assertIn("Club A", page.inner_text("#main h2"))
+            self.assertEqual(page.evaluate("CLUB.error"), "")
+            self.assertEqual(page.evaluate("location.hash"), f"#clubs/{a}")
             browser.close()
 
     def test_out_of_band_short_and_long_films_can_be_picked(self):

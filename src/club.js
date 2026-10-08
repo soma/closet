@@ -57,8 +57,15 @@ async function loadClubs() {
 /* Resolves true when `id`'s data was stored, false when the response was stale. */
 async function loadClub(id) {
   const seq = ++clubLoadSeq;
-  const data = await window.pages.call("club_state", { club_id: id });
-  if (seq !== clubLoadSeq || CLUB.id !== id) return false;
+  const stale = () => seq !== clubLoadSeq || CLUB.id !== id;
+  let data;
+  try {
+    data = await window.pages.call("club_state", { club_id: id });
+  } catch (e) {
+    if (stale()) return false;   // an old request failing must not disturb the current view
+    throw e;
+  }
+  if (stale()) return false;
   CLUB.data = data;
   return true;
 }
