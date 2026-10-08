@@ -153,6 +153,14 @@ const APP = {
     },
   },
 
+  // The poster sprite sheets are page assets; the page reads their URLs here.
+  poster_sheets: {
+    inputs: () => ({ sheets: { collection: "poster_sheets" } }),
+    run: (args, actor, rows) => ({
+      result: rows.sheets.map(r => ({ key: r.key, sheet: r.data && r.data.sheet, asset_url: r.asset_url || null })),
+    }),
+  },
+
   make_current: {
     inputs: clubInputs,
     run: (args, actor, rows, ids) => {

@@ -127,6 +127,8 @@
   .club-share-status { color: var(--ink-faint); font-family: var(--mono); font-size: 11px; }
   .club-share-url { min-width: min(70vw, 420px); font-family: var(--mono); font-size: 12px; }
   header.top { flex-wrap: wrap; }
+  .sprite { position: absolute; inset: 0; background-repeat: no-repeat; }
+  .club-thumb, .film-modal .pcol .poster, .visitor-modal .pgrid .pic, .poster-card .poster-wrap { position: relative; }
 
 
   /* ---------- layout shell ---------- */
@@ -1593,7 +1595,9 @@ function posterCard(film, opts = {}) {
   const wrap = el("div", { class: "poster-wrap" });
   const placeholder = el("div", { class: "placeholder" }, film.film_title);
   wrap.append(placeholder);
-  if (film.poster_url) {
+  const sprite = spriteEl(film.film_slug);
+  if (sprite) wrap.append(sprite);
+  else if (film.poster_url) {
     const img = el("img", {
       alt: film.film_title,
       loading: "lazy",
@@ -2081,7 +2085,10 @@ function openFilmModal(slug) {
 
   const pcol = el("div", { class: "pcol" });
   const poster = el("div", { class: "poster" });
-  if (f.poster_url) {
+  const sprite = spriteEl(slug);
+  if (sprite) {
+    poster.append(sprite);
+  } else if (f.poster_url) {
     const img = el("img", { alt: f.film_title, loading: "lazy" });
     img.src = f.poster_url;
     poster.append(img);
@@ -2192,7 +2199,9 @@ function openVisitorModal(slug) {
     pic.append(el("div", { class: "ord" }, String(p.pick_order)));
     // Always append the title fallback first; image overlays it when loaded.
     pic.append(el("div", { class: "ttl-fall" }, f.film_title));
-    if (f.poster_url) {
+    const sprite = spriteEl(f.film_slug);
+    if (sprite) pic.append(sprite);
+    else if (f.poster_url) {
       const img = el("img", { alt: f.film_title, loading: "lazy", decoding: "async" });
       img.dataset.src = f.poster_url;
       pic.append(img);
@@ -2216,6 +2225,31 @@ function openVisitorModal(slug) {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && $("#modal-mount").firstChild) closeModal();
 });
+
+/* ============== POSTERS ============== */
+/* Pages blocks hotlinked images, so there the posters are sprite sheets that
+ * were uploaded to the page as assets: POSTER_MAP is slug -> [sheet, col, row]
+ * (null in builds that hotlink, e.g. GitHub Pages), POSTER_SHEETS sheet -> url. */
+const POSTER_MAP = null;
+const POSTER_SHEETS = {};
+async function loadPosterSheets() {
+  if (!POSTER_MAP || !window.pages || !window.pages.call) return;
+  try {
+    const rows = await Promise.race([window.pages.call("poster_sheets", {}), new Promise((_, no) => setTimeout(no, 4000))]);
+    for (const r of rows) if (r.asset_url && Number.isInteger(r.sheet)) POSTER_SHEETS[r.sheet] = r.asset_url;
+  } catch (e) { /* no sprites: posters fall back to their own links */ }
+}
+function spriteEl(slug) {
+  const at = POSTER_MAP && POSTER_MAP.map[slug];
+  const url = at && POSTER_SHEETS[at[0]];
+  if (!url) return null;
+  const { cols, rows } = POSTER_MAP;
+  const box = el("div", { class: "sprite", role: "img", "aria-label": DB.filmBy.get(slug)?.film_title || "" });
+  box.style.backgroundImage = `url(${JSON.stringify(url)})`;
+  box.style.backgroundSize = `${cols * 100}% ${rows * 100}%`;
+  box.style.backgroundPosition = `${at[1] / (cols - 1) * 100}% ${at[2] / (rows - 1) * 100}%`;
+  return box;
+}
 
 /* ============== CLUBS ============== */
 /* Shared film club feeds. State lives on the Pages host (server.js); this is
@@ -2392,7 +2426,9 @@ async function maybeFillImdb(data) {
 function filmThumb(slug) {
   const f = DB.filmBy.get(slug);
   const box = el("div", { class: "club-thumb" });
-  if (f && f.poster_url) {
+  const sprite = spriteEl(slug);
+  if (sprite) box.append(sprite);
+  else if (f && f.poster_url) {
     const img = el("img", { alt: "", loading: "lazy" });
     img.addEventListener("error", () => img.remove(), { once: true });
     img.src = f.poster_url;
@@ -2522,6 +2558,7 @@ function watchedEl(e, act) {
     const t0 = performance.now();
     const raw = await decode(DATA_B64);
     DB = build(raw);
+    await loadPosterSheets();
     console.log(`Loaded ${DB.films.length} films, ${DB.visits.length} visits, ${DB.picks.length} picks in ${(performance.now()-t0).toFixed(0)}ms`);
     applyHash();
     renderShell();

@@ -1,3 +1,28 @@
+/* ============== POSTERS ============== */
+/* Pages blocks hotlinked images, so there the posters are sprite sheets that
+ * were uploaded to the page as assets: POSTER_MAP is slug -> [sheet, col, row]
+ * (null in builds that hotlink, e.g. GitHub Pages), POSTER_SHEETS sheet -> url. */
+const POSTER_MAP = __POSTER_MAP__;
+const POSTER_SHEETS = {};
+async function loadPosterSheets() {
+  if (!POSTER_MAP || !window.pages || !window.pages.call) return;
+  try {
+    const rows = await Promise.race([window.pages.call("poster_sheets", {}), new Promise((_, no) => setTimeout(no, 4000))]);
+    for (const r of rows) if (r.asset_url && Number.isInteger(r.sheet)) POSTER_SHEETS[r.sheet] = r.asset_url;
+  } catch (e) { /* no sprites: posters fall back to their own links */ }
+}
+function spriteEl(slug) {
+  const at = POSTER_MAP && POSTER_MAP.map[slug];
+  const url = at && POSTER_SHEETS[at[0]];
+  if (!url) return null;
+  const { cols, rows } = POSTER_MAP;
+  const box = el("div", { class: "sprite", role: "img", "aria-label": DB.filmBy.get(slug)?.film_title || "" });
+  box.style.backgroundImage = `url(${JSON.stringify(url)})`;
+  box.style.backgroundSize = `${cols * 100}% ${rows * 100}%`;
+  box.style.backgroundPosition = `${at[1] / (cols - 1) * 100}% ${at[2] / (rows - 1) * 100}%`;
+  return box;
+}
+
 /* ============== CLUBS ============== */
 /* Shared film club feeds. State lives on the Pages host (server.js); this is
  * the suggestion rule and the view. */
@@ -173,7 +198,9 @@ async function maybeFillImdb(data) {
 function filmThumb(slug) {
   const f = DB.filmBy.get(slug);
   const box = el("div", { class: "club-thumb" });
-  if (f && f.poster_url) {
+  const sprite = spriteEl(slug);
+  if (sprite) box.append(sprite);
+  else if (f && f.poster_url) {
     const img = el("img", { alt: "", loading: "lazy" });
     img.addEventListener("error", () => img.remove(), { once: true });
     img.src = f.poster_url;

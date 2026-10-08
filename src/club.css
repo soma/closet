@@ -39,3 +39,5 @@
   .club-share-status { color: var(--ink-faint); font-family: var(--mono); font-size: 11px; }
   .club-share-url { min-width: min(70vw, 420px); font-family: var(--mono); font-size: 12px; }
   header.top { flex-wrap: wrap; }
+  .sprite { position: absolute; inset: 0; background-repeat: no-repeat; }
+  .club-thumb, .film-modal .pcol .poster, .visitor-modal .pgrid .pic, .poster-card .poster-wrap { position: relative; }

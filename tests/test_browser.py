@@ -351,6 +351,45 @@ class Smoke(unittest.TestCase):
             self.assertEqual(errors, [])
             browser.close()
 
+    def test_posters_use_sprite_sheets_when_uploaded_and_hotlinks_otherwise(self):
+        import shutil, tempfile, sys
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import build as builder
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            (root / "src").mkdir(); (root / "data").mkdir()
+            for name in ("template.html", "club.js", "club.css", "server.js"):
+                shutil.copy(ROOT / "src" / name, root / "src" / name)
+            shutil.copy(ROOT / "data/closet.json", root / "data/closet.json")
+            (root / "data/posters.json").write_text(json.dumps({"cols": 8, "rows": 8, "map": {"12-angry-men": [0, 3, 2], "8-half": [1, 7, 7]}}))
+            builder.build(root)
+            self.assertNotIn('"12-angry-men":[0', (root / "index.html").read_text(encoding="utf-8"), "GitHub Pages build keeps hotlinking")
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                errors = []
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                gif = "data:image/gif;base64,R0lGODlhAQABAAAAACw="
+                pre = f"""__host.db.poster_sheets = [{{ id: "ps0", key: "sheet-00", data: {{ sheet: 0 }}, asset_url: "{gif}", author: "u1", created_at: "1", updated_at: "1" }}];"""
+                page.add_init_script(FAKE_PAGES + pre)
+                page.goto((root / "dist/index.html").as_uri())
+                page.wait_for_function("typeof DB !== 'undefined' && DB !== null")
+                got = page.evaluate("""() => {
+                  const card = f => posterCard(DB.filmBy.get(f));
+                  const a = card("12-angry-men"), b = card("8-half"), c = card("zorns-lemma");
+                  const s = a.querySelector(".sprite");
+                  return { sprite: !!s, size: s && s.style.backgroundSize, pos: s && s.style.backgroundPosition, img: !!a.querySelector("img"),
+                           sheetMissing: !b.querySelector(".sprite") && !!b.querySelector("img"),     // sheet 1 not uploaded
+                           unmapped: !c.querySelector(".sprite") && !!c.querySelector("img") };
+                }""")
+                self.assertEqual((got["sprite"], got["size"], got["img"]), (True, "800% 800%", False))
+                x, y = [float(v.rstrip("%")) for v in got["pos"].split()]
+                self.assertAlmostEqual(x, 3 / 7 * 100, places=2)
+                self.assertAlmostEqual(y, 2 / 7 * 100, places=2)
+                self.assertTrue(got["sheetMissing"] and got["unmapped"])
+                self.assertEqual(errors, [])
+                browser.close()
+
     def test_clubs_tab_without_host_explains_itself(self):
         with sync_playwright() as p:
             browser, page, errors = self.page(p)

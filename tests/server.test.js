@@ -55,6 +55,17 @@ test("fill_imdb repairs old entries only, is idempotent, changes no state, logs 
   assert.ok(a.id && cc.id);
 });
 
+test("poster_sheets returns the sheet number and url of each uploaded asset row", async () => {
+  const s = setup();
+  s.host.db.poster_sheets = [
+    { id: "p1", key: "sheet-01", data: { sheet: 1 }, asset_url: "https://assets/1", author: "x", created_at: "1", updated_at: "1" },
+    { id: "p0", key: "sheet-00", data: { sheet: 0 }, asset_url: "https://assets/0", author: "x", created_at: "1", updated_at: "1" },
+  ];
+  const out = await s.ann("poster_sheets", {});
+  assert.deepEqual(out.map(r => [r.sheet, r.asset_url]).sort(), [[0, "https://assets/0"], [1, "https://assets/1"]]);
+  assert.deepEqual(await setup().ann("poster_sheets", {}), []);
+});
+
 test("rejects unknown film, unknown club, bad dates and bad times", async () => {
   const s = setup(); const c = await club(s);
   await assert.rejects(s.ann("add_entry", { club_id: c, film_slug: "nope" }), /unknown film/);

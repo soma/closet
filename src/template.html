@@ -1552,7 +1552,9 @@ function posterCard(film, opts = {}) {
   const wrap = el("div", { class: "poster-wrap" });
   const placeholder = el("div", { class: "placeholder" }, film.film_title);
   wrap.append(placeholder);
-  if (film.poster_url) {
+  const sprite = spriteEl(film.film_slug);
+  if (sprite) wrap.append(sprite);
+  else if (film.poster_url) {
     const img = el("img", {
       alt: film.film_title,
       loading: "lazy",
@@ -2040,7 +2042,10 @@ function openFilmModal(slug) {
 
   const pcol = el("div", { class: "pcol" });
   const poster = el("div", { class: "poster" });
-  if (f.poster_url) {
+  const sprite = spriteEl(slug);
+  if (sprite) {
+    poster.append(sprite);
+  } else if (f.poster_url) {
     const img = el("img", { alt: f.film_title, loading: "lazy" });
     img.src = f.poster_url;
     poster.append(img);
@@ -2151,7 +2156,9 @@ function openVisitorModal(slug) {
     pic.append(el("div", { class: "ord" }, String(p.pick_order)));
     // Always append the title fallback first; image overlays it when loaded.
     pic.append(el("div", { class: "ttl-fall" }, f.film_title));
-    if (f.poster_url) {
+    const sprite = spriteEl(f.film_slug);
+    if (sprite) pic.append(sprite);
+    else if (f.poster_url) {
       const img = el("img", { alt: f.film_title, loading: "lazy", decoding: "async" });
       img.dataset.src = f.poster_url;
       pic.append(img);
@@ -2184,6 +2191,7 @@ document.addEventListener("keydown", (e) => {
     const t0 = performance.now();
     const raw = await decode(DATA_B64);
     DB = build(raw);
+    await loadPosterSheets();
     console.log(`Loaded ${DB.films.length} films, ${DB.visits.length} visits, ${DB.picks.length} picks in ${(performance.now()-t0).toFixed(0)}ms`);
     applyHash();
     renderShell();

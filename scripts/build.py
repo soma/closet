@@ -30,11 +30,15 @@ def build(root=ROOT):
     # only (from the environment), never into the committed index.html.
     pages_url = os.environ.get("PAGES_URL", "")
     assert '"' not in pages_url and "\\" not in pages_url and "<" not in pages_url, "PAGES_URL must be a plain URL"
+    posters = root / "data/posters.json"
+    poster_map = posters.read_text(encoding="utf-8").strip() if posters.exists() else "null"
     for target, page_url in (("index.html", ""), ("dist/index.html", pages_url)):
         path = root / target
         path.parent.mkdir(exist_ok=True)
-        path.write_text(html.replace("__PAGE_URL__", page_url), encoding="utf-8")
-    return html.replace("__PAGE_URL__", "")
+        # sprite sheets exist only as Pages assets: the GitHub Pages build keeps hotlinking
+        out = html.replace("__PAGE_URL__", page_url).replace("__POSTER_MAP__", poster_map if target.startswith("dist") else "null")
+        path.write_text(out, encoding="utf-8")
+    return html.replace("__PAGE_URL__", "").replace("__POSTER_MAP__", "null")
 
 
 if __name__ == "__main__":
