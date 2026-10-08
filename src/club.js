@@ -166,8 +166,8 @@ function paintClub(body) {
   appendAll(body,
     el("button", { class: "btn small ghost", onclick: () => { clubLoadSeq++; CLUB.id = null; CLUB.data = null; CLUB.clubs = null; writeHash(); renderView(); } }, "← All clubs"),
     el("h2", {}, d.club.data.name),
-    el("p", { class: "club-meta" }, "Link to this club: add ",
-      el("code", { class: "club-link" }, "#clubs/" + encodeURIComponent(cid)), " to the end of the page address"),
+    el("p", { class: "club-meta" }, "Link to this club: the page address, with anything after # replaced by ",
+      el("code", { class: "club-link" }, "#clubs/" + encodeURIComponent(cid))),
     clubError(),
     el("h3", {}, "Current"),
     current
