@@ -3,8 +3,8 @@
 
     scripts/fetch_letterboxd.py [--out new.json] [--delay 3] [--max-visits N]
 
-Run it yourself, from your own machine. It identifies itself honestly, waits
-between requests, and caches list and film pages under .cache/letterboxd/ so a
+Uses browser-style headers and an in-memory cookie session, waits between
+requests, and caches list and film pages under .cache/letterboxd/ so a
 rerun skips them (the lists index is always refetched, and a page that fails
 to parse is dropped from the cache). It stops at the first 403 or 429 instead of retrying. It writes
 columnar JSON for scripts/merge_data.py. Nothing in the dataset is modified.
@@ -13,11 +13,18 @@ Parsing of list and index pages is covered by tests against saved pages. Film
 page parsing (parse_film) was written without a saved film page to test
 against: check its output on a few films before trusting it.
 """
-import argparse, html, json, pathlib, re, sys, time, urllib.error, urllib.request
+import argparse, html, http.cookiejar, json, pathlib, re, sys, time, urllib.error, urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BASE = "https://letterboxd.com"
-USER_AGENT = "closet-explorer/1.0 (hobby film club project; honours 403/429 by stopping)"
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Upgrade-Insecure-Requests": "1",
+}
+OPENER = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 CACHE = ROOT / ".cache/letterboxd"
 DATE_RE = re.compile(r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2}, \d{4}\b")
 
@@ -41,9 +48,13 @@ def get(path, delay, refresh=False):
     if cached.exists() and not refresh:
         return cached.read_text(encoding="utf-8")
     time.sleep(delay)
-    req = urllib.request.Request(BASE + path, headers={"User-Agent": USER_AGENT})
+    headers = dict(HEADERS)
+    if path.startswith("/closetpicks/lists/page/"):
+        headers["Referer"] = BASE + "/closetpicks/lists/"
+    req = urllib.request.Request(BASE + path, headers=headers)
     try:
-        body = urllib.request.urlopen(req, timeout=30).read().decode("utf-8")
+        with OPENER.open(req, timeout=30) as response:
+            body = response.read().decode("utf-8")
     except urllib.error.HTTPError as e:
         if e.code in (403, 429):
             raise Blocked(f"{e.code} from letterboxd.com for {path}; stopping. Wait a while or use the official API.")
@@ -69,7 +80,7 @@ def meta(page, prop):
 
 def parse_list(slug, page):
     """Return (visit dict, [(pick_order, film_slug, film_title, film_year)])."""
-    h1 = re.search(r'<h1 class="title-1 prettify">\s*([^<]*?)\s*</h1>', page)
+    h1 = re.search(r'<h1 class="title-1 prettify(?: [^"]*)?">\s*([^<]*?)\s*</h1>', page)
     if not h1:
         raise ParseError(f"list {slug}: no title recognised")
     title = html.unescape(h1.group(1))

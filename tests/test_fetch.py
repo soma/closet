@@ -1,4 +1,4 @@
-import json, pathlib, sys, tempfile, unittest
+import http.server, json, pathlib, sys, tempfile, threading, unittest
 from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -6,6 +6,61 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import fetch_letterboxd as f  # noqa: E402
 
 FIX = ROOT / "tests/fixtures"
+
+
+class Requests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        cache = mock.patch.object(f, "CACHE", pathlib.Path(self.tmp.name))
+        cache.start()
+        self.addCleanup(cache.stop)
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                browser_headers = (
+                    self.headers.get("User-Agent", "").startswith("Mozilla/5.0")
+                    and "text/html" in self.headers.get("Accept", "")
+                    and "en" in self.headers.get("Accept-Language", "")
+                    and self.headers.get("Upgrade-Insecure-Requests") == "1"
+                )
+                if self.path == "/first/":
+                    status = 200 if browser_headers else 403
+                elif self.path == "/second/":
+                    status = 200 if browser_headers and self.headers.get("Cookie") == "session=test" else 403
+                else:
+                    status = int(self.path.strip("/"))
+                self.send_response(status)
+                if self.path == "/first/" and status == 200:
+                    self.send_header("Set-Cookie", "session=test; Path=/")
+                self.end_headers()
+                self.wfile.write(b"<html>film club</html>")
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(thread.join)
+        self.addCleanup(server.shutdown)
+        base = mock.patch.object(f, "BASE", f"http://127.0.0.1:{server.server_port}")
+        base.start()
+        self.addCleanup(base.stop)
+
+    def test_browser_headers_and_session_cookies_fetch_successive_pages(self):
+        self.assertEqual(f.get("/first/", 0), "<html>film club</html>")
+        self.assertEqual(f.get("/second/", 0), "<html>film club</html>")
+        self.assertEqual(f.cache_path("/second/").read_text(), "<html>film club</html>")
+
+    def test_blocked_responses_are_not_cached(self):
+        for status in (403, 429):
+            with self.subTest(status=status):
+                path = f"/{status}/"
+                with self.assertRaises(f.Blocked):
+                    f.get(path, 0)
+                self.assertFalse(f.cache_path(path).exists())
 
 
 class Parsing(unittest.TestCase):
@@ -27,6 +82,13 @@ class Parsing(unittest.TestCase):
     def test_film_without_json_ld_still_returns_a_row(self):
         row = f.parse_film("x", "X", 2000, "<html></html>")
         self.assertEqual((row["film_slug"], row["film_year"], row["runtime_min"]), ("x", 2000, None))
+
+    def test_list_title_with_notes_class(self):
+        page = (FIX / "list.html").read_text(encoding="utf-8")
+        page = page.replace('class="title-1 prettify"', 'class="title-1 prettify has-notes"')
+        visit, picks = f.parse_list("sander-laks-criterion-closet-picks", page)
+        self.assertEqual(visit["visitor"], "Sander Lak")
+        self.assertEqual(len(picks), 3)
 
     def test_film_imdb_id_comes_from_the_imdb_link_or_is_blank(self):
         page = '<a href="http://www.imdb.com/title/tt0050083/maindetails" class="micro-button">IMDb</a>'
