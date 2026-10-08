@@ -76,6 +76,21 @@ class Backfill(unittest.TestCase):
                 self.assertEqual(b.main([]), 2)
             self.assertEqual(path.read_bytes(), before)
 
+    def test_only_films_without_an_id_are_looked_up(self):
+        import tempfile
+        from unittest import mock
+        d, slugs, ii = small()
+        d["films"]["rows"][0][ii] = "tt1111111"
+        d["films"]["rows"][1][ii] = "tt2222222"
+        asked = []
+        with tempfile.TemporaryDirectory() as t:
+            path = pathlib.Path(t) / "closet.json"
+            path.write_text(merge_data.dump(d), encoding="utf-8")
+            with mock.patch.object(merge_data, "DATA", path), mock.patch.object(merge_data, "validate", return_value=[]), \
+                 mock.patch.object(b, "lookup", side_effect=lambda s, **k: asked.extend(s) or ({}, [])):
+                self.assertEqual(b.main([]), 0)
+        self.assertEqual(asked, slugs[2:])
+
     def test_other_http_errors_are_not_retried(self):
         n = []
         def boom(chunk):

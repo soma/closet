@@ -1,6 +1,7 @@
 dist/
 __pycache__/
 .venv/
-.claude/
+.claude/playwright-mcp/
+.claude/settings.local.json
 .cache/
 new.json

@@ -49,6 +49,48 @@ class Packing(unittest.TestCase):
                 self.assertEqual(sheet.size, (1280, 1920))
 
 
+def thumbs(cache, slugs):
+    (cache / "thumbs").mkdir(exist_ok=True)
+    for i, s in enumerate(slugs):
+        Image.new("RGB", (160, 240), (i % 250, 5, 5)).save(cache / "thumbs" / f"{s}.png")
+
+
+class StablePacking(unittest.TestCase):
+    def test_existing_posters_keep_their_slots_and_new_ones_take_the_lowest_free_ones(self):
+        with tempfile.TemporaryDirectory() as d:
+            cache = pathlib.Path(d)
+            first = [f"f{i}" for i in range(10)]
+            thumbs(cache, first + ["a0", "z9"])
+            before = mp.pack([(s, "u") for s in first], cache)
+            # an update inserts a0 alphabetically first, drops f3, adds z9 last
+            items = [("a0", "u")] + [(s, "u") for s in first if s != "f3"] + [("z9", "u")]
+            after = mp.pack(items, cache, previous=before)
+            for s in first:
+                if s != "f3":
+                    self.assertEqual(after["map"][s], before["map"][s], s)
+            self.assertNotIn("f3", after["map"])
+            self.assertEqual(after["map"]["a0"], before["map"]["f3"], "the freed slot is reused first")
+            self.assertEqual(after["map"]["z9"], [0, 2, 1], "then the next free one after the last used slot")
+
+    def test_unchanged_sheets_stay_byte_identical_when_only_a_later_sheet_gains_posters(self):
+        with tempfile.TemporaryDirectory() as d:
+            cache = pathlib.Path(d)
+            slugs = [f"f{i}" for i in range(70)]
+            thumbs(cache, slugs)
+            items = [(s, "u") for s in slugs]
+            first = mp.pack(items[:64], cache)
+            hashes = json.loads((cache / "sheets.json").read_text())
+            self.assertEqual(sorted(hashes), ["sheet-00.webp"])
+            mp.pack(items, cache, previous=first)
+            again = json.loads((cache / "sheets.json").read_text())
+            self.assertEqual(sorted(again), ["sheet-00.webp", "sheet-01.webp"])
+            self.assertEqual(again["sheet-00.webp"], hashes["sheet-00.webp"], "sheet 0 did not change")
+
+    def test_a_different_geometry_ignores_the_old_map(self):
+        got = mp.assign(["a", "b"], {"cols": 3, "rows": 3, "map": {"b": [0, 2, 2]}})
+        self.assertEqual(got, {"a": [0, 0, 0], "b": [0, 1, 0]})
+
+
 class Fetching(unittest.TestCase):
     def test_blocked_stops_but_keeps_earlier_thumbnails_and_reruns_skip_them(self):
         with tempfile.TemporaryDirectory() as d:

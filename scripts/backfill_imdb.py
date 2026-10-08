@@ -87,7 +87,12 @@ def main(argv=None):
     if "imdb_id" not in cols:
         print("backfill_imdb: the dataset has no imdb_id column", file=sys.stderr)
         return 1
-    slugs = [r[cols.index("film_slug")] for r in data["films"]["rows"]]
+    si, ii = cols.index("film_slug"), cols.index("imdb_id")
+    # only ask about films that still lack an id, so an update is one small request
+    slugs = [r[si] for r in data["films"]["rows"] if args.overwrite or not r[ii]]
+    if not slugs:
+        print("nothing to fill: every film already has an imdb_id")
+        return 0
     try:
         found, malformed = lookup(slugs, delay=args.delay)
     except Exception as e:

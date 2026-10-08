@@ -11,7 +11,7 @@ Stage 2 packs the thumbnails into WebP sheets under .cache/posters/sheets/ and
 writes data/posters.json (slug -> [sheet, column, row]); the sheets stay out of
 git, the small map is committed.
 """
-import argparse, io, json, pathlib, sys, time, urllib.error, urllib.request
+import argparse, hashlib, io, json, pathlib, sys, time, urllib.error, urllib.request
 
 from PIL import Image
 
@@ -75,23 +75,58 @@ def fetch_thumbs(items, delay, cache=CACHE, get=download):
     return failed
 
 
-def pack(items, cache=CACHE):
-    """Sheets of COLS x ROWS thumbnails in dataset order. Returns the map."""
-    have = [(s, cache / "thumbs" / f"{s}.png") for s, _ in items if (cache / "thumbs" / f"{s}.png").exists()]
+def slot(pos):
+    return pos[0] * PER_SHEET + pos[2] * COLS + pos[1]
+
+
+def at(n):
+    return [n // PER_SHEET, n % COLS, (n % PER_SHEET) // COLS]
+
+
+def assign(wanted, previous):
+    """Stable slots: a poster that already has one keeps it (so an update only
+    changes the sheets that gained posters), new posters take the lowest free
+    slots, posters no longer wanted free theirs. `previous` is the old
+    data/posters.json content, ignored when the sheet geometry differs."""
+    old = {}
+    if previous and (previous.get("cols"), previous.get("rows")) == (COLS, ROWS):
+        old = previous.get("map", {})
+    wanted_set = set(wanted)
+    kept = {s: pos for s, pos in old.items() if s in wanted_set}
+    used = {slot(p) for p in kept.values()}
+    n = 0
+    for s in wanted:
+        if s in kept:
+            continue
+        while n in used:
+            n += 1
+        kept[s] = at(n)
+        used.add(n)
+    return kept
+
+
+def pack(items, cache=CACHE, previous=None):
+    """Sheets of COLS x ROWS thumbnails. Returns the map; writes the sheets and
+    a manifest of their content hashes (sheets.json) so uploads can be limited
+    to what changed."""
+    wanted = [s for s, _ in items if (cache / "thumbs" / f"{s}.png").exists()]
+    mapping = assign(wanted, previous)
     sheets = cache / "sheets"
     sheets.mkdir(parents=True, exist_ok=True)
     for old in sheets.glob("sheet-*.webp"):
         old.unlink()
-    mapping = {}
-    for start in range(0, len(have), PER_SHEET):
-        chunk = have[start:start + PER_SHEET]
-        index = start // PER_SHEET
+    count = (max((slot(p) for p in mapping.values()), default=-1) // PER_SHEET) + 1
+    manifest = {}
+    for index in range(count):
         sheet = Image.new("RGB", (COLS * THUMB_W, ROWS * THUMB_H), (14, 12, 10))
-        for k, (slug, path) in enumerate(chunk):
-            col, row = k % COLS, k // COLS
-            sheet.paste(Image.open(path), (col * THUMB_W, row * THUMB_H))
-            mapping[slug] = [index, col, row]
-        sheet.save(sheets / f"sheet-{index:02d}.webp", "WEBP", quality=72, method=6)
+        for slug, pos in mapping.items():
+            if pos[0] == index:
+                with Image.open(cache / "thumbs" / f"{slug}.png") as im:
+                    sheet.paste(im, (pos[1] * THUMB_W, pos[2] * THUMB_H))
+        name = f"sheet-{index:02d}.webp"
+        sheet.save(sheets / name, "WEBP", quality=72, method=6)
+        manifest[name] = hashlib.sha1((sheets / name).read_bytes()).hexdigest()
+    (cache / "sheets.json").write_text(json.dumps(manifest, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     return {"cols": COLS, "rows": ROWS, "map": mapping}
 
 
@@ -109,7 +144,9 @@ def main(argv=None):
             return 2
         for slug, why in failed:
             print(f"failed: {slug}: {why}", file=sys.stderr)
-    result = pack(items)
+    posters = ROOT / "data/posters.json"
+    previous = json.loads(posters.read_text(encoding="utf-8")) if posters.exists() else None
+    result = pack(items, previous=previous)
     (ROOT / "data/posters.json").write_text(json.dumps(result, separators=(",", ":")) + "\n", encoding="utf-8")
     total = sum(p.stat().st_size for p in (CACHE / "sheets").glob("sheet-*.webp"))
     print(f"{len(result['map'])} of {len(items)} posters in {-(-len(result['map']) // PER_SHEET)} sheets, {total // 1024} KB")
