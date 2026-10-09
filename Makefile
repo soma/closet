@@ -3,7 +3,7 @@ DELAY ?= 3
 # The update stages read and rewrite the same files: never run them in parallel.
 .NOTPARALLEL:
 
-.PHONY: help setup fetch merge build backfill-imdb posters poster-status stage-status summary update refresh test
+.PHONY: help setup fetch merge build backfill-imdb imdb-ratings posters poster-status stage-status summary update refresh test
 
 help:
 	@echo "make setup    one-time: venv, playwright, chromium (only needed for tests)"
@@ -14,6 +14,7 @@ help:
 	@echo "make posters  download posters and pack the sprite sheets (.cache/posters/sheets) for the Pages app"
 	@echo "make update  fetch + merge + imdb ids + posters + build + test + summary (needs ordinary network access)"
 	@echo "make poster-status  which poster sheets still need uploading to the Pages app"
+	@echo "make imdb-ratings  fetch IMDb ratings for the Pages app (git-ignored, never published in the repo)"
 	@echo "make refresh  fetch + merge + build + test"
 	@echo "make test     run script/test"
 
@@ -38,6 +39,9 @@ posters:
 backfill-imdb:
 	cd scripts && python3 backfill_imdb.py --delay 62
 
+imdb-ratings:
+	python3 scripts/imdb_ratings.py
+
 poster-status:
 	python3 scripts/poster_status.py
 
@@ -51,6 +55,7 @@ update:
 	$(MAKE) fetch
 	$(MAKE) merge
 	$(MAKE) backfill-imdb
+	$(MAKE) imdb-ratings
 	$(MAKE) posters
 	$(MAKE) build
 	$(MAKE) test

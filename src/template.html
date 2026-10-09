@@ -998,6 +998,15 @@ const el = (tag, props = {}, ...kids) => {
   }
   return e;
 };
+const IMDB_AS_OF = "__IMDB_AS_OF__";    // set only in the Pages upload, when it carries IMDb ratings
+/* 999, 1.2K, 345K, 1.2M */
+function fmtVotes(n) {
+  if (n == null) return "";
+  if (n < 1000) return String(n);
+  const trim = x => (x >= 100 ? String(Math.round(x)) : String(Math.round(x * 10) / 10));
+  return n < 999500 ? trim(n / 1e3) + "K" : trim(n / 1e6) + "M";
+}
+const imdbRating = f => (f && f.imdb_rating != null ? f.imdb_rating.toFixed(1) : null);
 const imdbUrl = id => /^tt\d{7,10}$/.test(id || "") ? `https://www.imdb.com/title/${id}/` : null;
 const splitList = s => (s ? s.split(";").map(x => x.trim()).filter(Boolean) : []);
 const fmt = n => n == null ? "—" : n.toLocaleString();
@@ -1211,6 +1220,9 @@ function footerEl() {
       el("a", { href: "https://letterboxd.com/closetpicks/", target: "_blank", rel: "noopener" }, "closetpicks list"),
       ` · ${fmt(DB.films.length)} unique films across ${fmt(DB.visits.length)} visits`
     ),
+    IMDB_AS_OF ? el("div", { class: "foot-credit" }, "Ratings: information courtesy of ",
+      el("a", { href: "https://www.imdb.com", target: "_blank", rel: "noopener" }, "IMDb"),
+      ` (https://www.imdb.com), non-commercial dataset as of ${IMDB_AS_OF}`) : null,
     el("div", { class: "mono" }, "v1.0 · vanilla js · 0 dependencies")
   );
 }
@@ -2085,6 +2097,7 @@ function openFilmModal(slug) {
   const pmeta = el("div", { class: "pmeta" });
   if (f.runtime_min) pmeta.append(metaRow("Runtime", `${f.runtime_min} min`));
   if (f.avg_rating != null) pmeta.append(metaRow("Rating", `★ ${f.avg_rating.toFixed(2)} · ${fmt(f.rating_count)} on Letterboxd`));
+  if (imdbRating(f)) pmeta.append(metaRow("IMDb", `★ ${imdbRating(f)} · ${fmtVotes(f.imdb_votes)} votes`));
   if (f.primary_language) pmeta.append(metaRow("Language", f.primary_language));
   if (f.countries) pmeta.append(metaRow("Country", splitList(f.countries).join(" · ")));
   if (f.studios) pmeta.append(metaRow("Studio", splitList(f.studios).slice(0, 2).join(" · ")));

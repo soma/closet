@@ -99,7 +99,7 @@ class MakeUpdateOrder(unittest.TestCase):
         import re
         real = (ROOT / "Makefile").read_text(encoding="utf-8")
         rule = re.search(r"^update:\n(?:\t.*\n)+", real, re.M).group(0)
-        stages = ["fetch", "merge", "backfill-imdb", "posters", "build", "test", "summary"]
+        stages = ["fetch", "merge", "backfill-imdb", "imdb-ratings", "posters", "build", "test", "summary"]
         stubs = "".join(f"{s}:\n\t@{'false' if s == failing else 'true'}; echo {s}\n" for s in stages)
         # a stub that fails must stop the run before it echoes anything for later stages
         stubs = stubs.replace(f"@false; echo {failing}", f"@echo {failing}; false") if failing else stubs
@@ -115,12 +115,12 @@ class MakeUpdateOrder(unittest.TestCase):
     def test_stages_run_in_order_even_with_parallel_flags(self):
         out = self.run_make(self.makefile(), "-j8")
         self.assertEqual(out.returncode, 0, out.stderr)
-        stages = [l for l in out.stdout.split("\n") if l in ("fetch", "merge", "backfill-imdb", "posters", "build", "test", "summary")]
-        self.assertEqual(stages, ["fetch", "merge", "backfill-imdb", "posters", "build", "test", "summary"])
+        stages = [l for l in out.stdout.split("\n") if l in ("fetch", "merge", "backfill-imdb", "imdb-ratings", "posters", "build", "test", "summary")]
+        self.assertEqual(stages, ["fetch", "merge", "backfill-imdb", "imdb-ratings", "posters", "build", "test", "summary"])
 
     def test_a_failing_stage_stops_everything_after_it(self):
         out = self.run_make(self.makefile(failing="merge"), "-j8")
         self.assertNotEqual(out.returncode, 0)
         self.assertIn("fetch", out.stdout)
-        for later in ("backfill-imdb", "posters", "build", "summary"):
+        for later in ("backfill-imdb", "imdb-ratings", "posters", "build", "summary"):
             self.assertNotIn(later, out.stdout.split("\n"))

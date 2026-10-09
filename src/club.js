@@ -231,7 +231,7 @@ function filmLine(slug, imdbId) {
     el("a", { href: "#", onclick: e => { e.preventDefault(); openFilmModal(slug); } }, f.film_title),
     ` (${f.film_year ?? "?"}) · ${f._directors.join(", ")} · ${f.runtime_min ?? "?"} min`,
     imdb ? " · " : null,
-    imdb ? el("a", { class: "ext", href: imdb, target: "_blank", rel: "noopener" }, "IMDb") : null);
+    imdb ? el("a", { class: "ext", href: imdb, target: "_blank", rel: "noopener" }, imdbRating(f) ? `IMDb ${imdbRating(f)}` : "IMDb") : null);
 }
 
 /* Entries added before imdb_id existed are repaired once per page load. */

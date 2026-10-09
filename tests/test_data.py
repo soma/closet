@@ -69,6 +69,65 @@ class PageUrl(unittest.TestCase):
         build.build()
 
 
+class PagesRatings(unittest.TestCase):
+    """IMDb ratings go into the Pages upload only: never into the committed root file or the dataset."""
+    RATINGS = {"as_of": "2026-10-08", "ratings": {"tt0050083": [9.0, 855123]}}
+
+    def built(self, ratings):
+        import shutil
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        root = pathlib.Path(d.name)
+        (root / "src").mkdir(); (root / "data").mkdir()
+        for f in (ROOT / "src").iterdir():
+            shutil.copy(f, root / "src" / f.name)
+        shutil.copy(ROOT / "data/closet.json", root / "data/closet.json")
+        if ratings:
+            (root / "data/imdb_ratings.json").write_text(json.dumps(ratings))
+        build.build(root)
+        return root
+
+    @staticmethod
+    def blob(root, name):
+        page = (root / name).read_text(encoding="utf-8")
+        return json.loads(gzip.decompress(base64.b64decode(re.search(r'const DATA_B64 = "([^"]*)";', page).group(1)))), page
+
+    def test_pages_upload_has_rating_columns_and_the_root_file_has_none(self):
+        root = self.built(self.RATINGS)
+        dist, dist_page = self.blob(root, "dist/index.html")
+        top, top_page = self.blob(root, "index.html")
+        cols = dist["films"]["cols"]
+        self.assertEqual(cols[-2:], ["imdb_rating", "imdb_votes"])
+        rows = {r[0]: r for r in dist["films"]["rows"]}
+        self.assertEqual(rows["12-angry-men"][-2:], [9.0, 855123])
+        self.assertEqual(rows["8-half"][-2:], [None, None], "unrated films get nulls")
+        self.assertEqual(top, DATA, "the committed root file is the canonical dataset, no ratings")
+        self.assertNotIn("imdb_rating", json.dumps(top))
+        self.assertIn('const IMDB_AS_OF = "2026-10-08";', dist_page)
+        self.assertIn('const IMDB_AS_OF = "";', top_page)
+        self.assertEqual({k: dist[k] for k in ("visits", "picks")}, {k: DATA[k] for k in ("visits", "picks")})
+
+    def test_without_a_ratings_file_nothing_is_added_anywhere(self):
+        root = self.built(None)
+        dist, dist_page = self.blob(root, "dist/index.html")
+        self.assertEqual(dist, DATA)
+        self.assertIn('const IMDB_AS_OF = "";', dist_page)
+
+    def test_the_staging_fingerprint_follows_the_ratings_file(self):
+        import stage_status
+        root = self.built(None)
+        before = stage_status.fingerprint(root)
+        (root / "data/imdb_ratings.json").write_text(json.dumps(self.RATINGS))
+        self.assertNotEqual(stage_status.fingerprint(root), before)
+
+    def test_the_root_index_html_that_gets_committed_has_no_ratings(self):
+        committed = (ROOT / "index.html").read_text(encoding="utf-8")
+        blob = re.search(r'const DATA_B64 = "([^"]*)";', committed).group(1)
+        data = json.loads(gzip.decompress(base64.b64decode(blob)))
+        self.assertNotIn("imdb_rating", data["films"]["cols"])
+        self.assertIn('const IMDB_AS_OF = "";', committed)
+
+
 class ImdbData(unittest.TestCase):
     def test_every_imdb_id_is_blank_or_well_formed(self):
         cols = DATA["films"]["cols"]

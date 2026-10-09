@@ -5,3 +5,5 @@ __pycache__/
 .claude/settings.local.json
 .cache/
 new.json
+data/imdb_ratings.json
+data/imdb_ratings.json.tmp

@@ -887,6 +887,58 @@ class Smoke(unittest.TestCase):
             self.assertEqual(errors, [])
             browser.close()
 
+    def test_votes_are_formatted_compactly(self):
+        with sync_playwright() as p:
+            browser, page, errors = self.page(p)
+            got = page.evaluate("[0, 7, 999, 1000, 1234, 99999, 150000, 345000, 855123, 999499, 999500, 1000000, 1234567, 10500000, null].map(fmtVotes)")
+            self.assertEqual(got, ["0", "7", "999", "1K", "1.2K", "100K", "150K", "345K", "855K", "999K", "1M", "1M", "1.2M", "10.5M", ""])
+            browser.close()
+
+    def test_imdb_ratings_show_in_the_popup_and_club_lines_of_the_pages_build_only(self):
+        import shutil, tempfile, sys
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import build as builder
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            (root / "src").mkdir(); (root / "data").mkdir()
+            for f in (ROOT / "src").iterdir():
+                shutil.copy(f, root / "src" / f.name)
+            shutil.copy(ROOT / "data/closet.json", root / "data/closet.json")
+            (root / "data/imdb_ratings.json").write_text(json.dumps({"as_of": "2026-10-08", "ratings": {"tt0050083": [9.0, 855123]}}))
+            builder.build(root)
+            seed = '__host.call("create_club", { name: "R" }, "u1"); __host.call("add_entry", { club_id: "id1", film_slug: "12-angry-men" }, "u1"); __host.call("add_entry", { club_id: "id1", film_slug: "8-half" }, "u1");'
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                errors = []
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                page.add_init_script(FAKE_PAGES + seed)
+                page.goto((root / "dist/index.html").as_uri() + "#clubs/id1")
+                page.wait_for_selector(".club-current a.ext")
+                self.assertEqual(page.locator(".club-current a.ext").inner_text(), "IMDb 9.0")
+                self.assertEqual(page.locator(".participants ~ * a.ext, .club-list a.ext").last.inner_text(), "IMDb", "no rating: just the link")
+                self.assertEqual(page.locator(".foot-credit").count(), 1)
+                credit = page.inner_text(".foot-credit")
+                self.assertIn("courtesy of IMDb", credit)
+                self.assertIn("as of 2026-10-08", credit)
+                self.assertNotIn("permission", credit.lower())
+                page.evaluate("openFilmModal('12-angry-men')")
+                self.assertIn("★ 9.0 · 855K votes", page.inner_text(".film-modal .pmeta"))
+                page.evaluate("closeModal(); openFilmModal('8-half')")
+                self.assertNotIn("IMDb", page.inner_text(".film-modal .pmeta"), "unrated: no row")
+                self.assertEqual(errors, [])
+                browser.close()
+            # the public (root) build of the same tree shows no ratings and no credit
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto((root / "index.html").as_uri())
+                page.wait_for_function("typeof DB !== 'undefined' && DB !== null")
+                page.evaluate("openFilmModal('12-angry-men')")
+                self.assertNotIn("votes", page.inner_text(".film-modal .pmeta"))
+                self.assertEqual(page.locator(".foot-credit").count(), 0)
+                browser.close()
+
     def test_my_closet_without_a_host_explains_itself(self):
         with sync_playwright() as p:
             browser, page, errors = self.page(p)
