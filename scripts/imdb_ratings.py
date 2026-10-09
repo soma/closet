@@ -38,11 +38,13 @@ def read_ratings(raw, wanted):
         raise RatingsError(f"unexpected header {lines[0][:60]!r}, expected {HEADER!r}")
     wanted = set(wanted)
     out, skipped = {}, 0
-    for line in lines[1:]:
+    for n, line in enumerate(lines[1:], 2):
         if not line:
             continue
         parts = line.rstrip("\r").split("\t")
-        if len(parts) != 3 or parts[0] not in wanted:
+        if len(parts) != 3:                      # a row of the wrong shape means the file is not what we expect
+            raise RatingsError(f"malformed row {n}: {len(parts)} fields instead of 3")
+        if parts[0] not in wanted:
             continue
         try:
             rating, votes = float(parts[1]), int(parts[2])

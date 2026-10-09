@@ -35,9 +35,12 @@ class BuiltPage(unittest.TestCase):
             page = (ROOT / path).read_text(encoding="utf-8")
             return json.loads(gzip.decompress(base64.b64decode(re.search(r'const DATA_B64 = "([^"]*)";', page).group(1)))), page
         posters = ROOT / "data/posters.json"
-        for target in ("index.html", "dist/index.html"):
-            data, page = decoded(target)
-            self.assertEqual(data, DATA, target)
+        # the root file is always the canonical dataset; the Pages upload is the canonical dataset plus the
+        # two IMDb columns when a (git-ignored) local ratings file exists
+        ratings_file = ROOT / "data/imdb_ratings.json"
+        expected_pages = build.with_ratings(DATA, json.loads(ratings_file.read_text(encoding="utf-8"))["ratings"]) if ratings_file.exists() else DATA
+        self.assertEqual(decoded("index.html")[0], DATA, "index.html")
+        self.assertEqual(decoded("dist/index.html")[0], expected_pages, "dist/index.html")
         # the GitHub Pages file always hotlinks; the Pages upload carries the sprite map when there is one
         self.assertIn("const POSTER_MAP = null;", decoded("index.html")[1])
         dist = decoded("dist/index.html")[1]

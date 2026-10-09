@@ -29,6 +29,14 @@ class Parsing(unittest.TestCase):
         got, _ = ir.read_ratings(dataset([("tt0000001", "8.0", "100")], eol="\r\n"), {"tt0000001"})
         self.assertEqual(got, {"tt0000001": [8.0, 100]})
 
+    def test_rows_with_the_wrong_number_of_fields_are_refused_even_for_unwanted_ids(self):
+        for bad in ("tt0000099\t5", "tt0000099\t5\t10\textra", "tt0000099"):
+            raw = gzip.compress((ir.HEADER + "\ntt0000001\t9.0\t10\n" + bad + "\n").encode())
+            with self.assertRaisesRegex(ir.RatingsError, "malformed row 3"):
+                ir.read_ratings(raw, {"tt0000001"})
+            with self.assertRaisesRegex(ir.RatingsError, "malformed row 3"):
+                ir.read_ratings(raw, [])                  # the shape check made before a download replaces the cache
+
     def test_a_different_header_is_refused(self):
         with self.assertRaisesRegex(ir.RatingsError, "unexpected header"):
             ir.read_ratings(dataset([("tt0000001", "8.0", "100")], header="tconst\tscore\tvotes"), {"tt0000001"})
@@ -95,7 +103,8 @@ class Fetching(unittest.TestCase):
         ir.update(self.root, opener=self.opener())
         before = (self.root / "data/imdb_ratings.json").read_bytes()
         cache_before = (self.root / ".cache/imdb/title.ratings.tsv.gz").read_bytes()
-        for bad in (urllib.error.URLError("network down"), Resp(self.raw, length=len(self.raw) + 100),
+        short_row = gzip.compress((ir.HEADER + "\ntt0000001\t9.0\n").encode())
+        for bad in (urllib.error.URLError("network down"), Resp(self.raw, length=len(self.raw) + 100), Resp(short_row),
                     Resp(dataset([("tt0000001", "9", "9")], header="a\tb\tc")), Resp(b"<html>oops</html>")):
             with self.assertRaises((ir.RatingsError, urllib.error.URLError)):
                 ir.update(self.root, refresh=True, opener=self.opener(bad))
